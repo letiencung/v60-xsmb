@@ -1,0 +1,24 @@
+name: Cap nhat du lieu XSMB
+on:
+  schedule:
+    - cron: '32 11 * * *'
+  workflow_dispatch:
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Tai du lieu moi
+        run: python fetch_data.py
+      - name: Commit neu co thay doi
+        run: |
+          git config user.name "xsmb-bot"
+          git config user.email "xsmb-bot@users.noreply.github.com"
+          git add data.json
+          git diff --staged --quiet || git commit -m "Cap nhat XSMB $(date +%d-%m-%Y)"
+          git push
