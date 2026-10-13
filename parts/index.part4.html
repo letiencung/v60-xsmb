@@ -1,0 +1,1178 @@
+                btn.innerHTML = '<i class="fas fa-check"></i> Đã xuất TXT';
+                setTimeout(() => { btn.innerHTML = oldHtml; }, 2000);
+            }
+        }
+
+
+        // Đã bỏ getEarlyWarningNumbers()/exportEarlyWarningsTxt()/copyEarlyWarningsTxt()
+        // cùng với card "CẢNH BÁO SỚM TỪ VỊ TRÍ NHẠY NHẤT" đã bị gỡ (xem ghi chú ở runAnalysis()).
+
+        // ================================================================
+        // KIỂM TRA HIỆU QUẢ DÀN TẦN SUẤT (rolling, không nhìn trước)
+        // ================================================================
+        function auditLast2Numbers(day) {
+            const out = [];
+            (day?.data || []).forEach(row => (row.numbers || []).forEach(num => out.push(String(num).slice(-2).padStart(2, '0'))));
+            return out;
+        }
+
+        function parseAuditWindows() {
+            const value = Number(document.getElementById('danAuditWindows')?.value);
+            return Number.isInteger(value) && value >= 2 && value <= 120 ? [value] : [];
+        }
+
+        function danAuditMetrics(rows) {
+            const bins = { '0–49': 0, '50–59': 0, '60–69': 0, '70–79': 0, '80–99': 0 };
+            rows.forEach(r => {
+                const key = r.size < 50 ? '0–49' : r.size < 60 ? '50–59' : r.size < 70 ? '60–69' : r.size < 80 ? '70–79' : '80–99';
+                bins[key]++;
+            });
+            let current = 0, max = 0, open = 0;
+            const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            const numberStats = Array.from({ length: 100 }, (_, n) => ({ number: String(n).padStart(2, '0'), inDan: 0, actual: 0, covered: 0 }));
+            rows.forEach(r => {
+                const set = new Set(r.dan);
+                for (const s of numberStats) {
+                    if (set.has(s.number)) s.inDan++;
+                    if (r.actual === s.number) { s.actual++; if (set.has(s.number)) s.covered++; }
+                }
+            });
+            rows.forEach(r => {
+                if (r.hit) {
+                    if (current > 0) counts[Math.min(current, 5)]++;
+                    max = Math.max(max, current); current = 0;
+                } else current++;
+            });
+            open = current; max = Math.max(max, open);
+            // Không đưa chuỗi cuối file vào counts: chuỗi này chưa có kỳ trúng để kết thúc.
+            return { bins, maxStreak: max, openStreak: open, streakCounts: counts, numberStats };
+        }
+
+        function renderDanNumberStats(stats) {
+            return stats.map(s => {
+                const misses = s.inDan - s.covered;
+                const conditional = s.inDan ? (s.covered / s.inDan * 100).toFixed(2) + '%' : '--';
+                return '<tr><td><strong>' + s.number + '</strong></td><td>' + s.inDan + '</td><td>' + s.actual + '</td><td class="dan-audit-good">' + s.covered + '</td><td class="dan-audit-bad">' + misses + '</td><td>' + conditional + '</td></tr>';
+            }).join('');
+        }
+
+        function runDanAudit() {
+            const summary = document.getElementById('danAuditSummary');
+            const details = document.getElementById('danAuditDetails');
+            if (!RAW_DAYS || RAW_DAYS.length < 3) {
+                summary.innerHTML = '<span class="dan-audit-bad">Chưa có đủ dữ liệu hợp lệ để kiểm tra.</span>';
+                details.innerHTML = '';
+                return;
+            }
+            const windows = parseAuditWindows();
+            if (!windows.length) {
+                summary.innerHTML = '<span class="dan-audit-bad">Cửa sổ không hợp lệ. Hãy nhập một số kỳ từ 2 đến 120, ví dụ 7 hoặc 10.</span>';
+                details.innerHTML = '';
+                return;
+            }
+            const usable = windows.filter(w => RAW_DAYS.length > w);
+            if (!usable.length) {
+                summary.innerHTML = '<span class="dan-audit-bad">Không có cửa sổ nào nhỏ hơn số kỳ dữ liệu hiện có.</span>';
+                details.innerHTML = '';
+                return;
+            }
+            document.getElementById('danAuditWindows').value = usable[0];
+            const reports = [];
+            for (const windowSize of usable) {
+                const rows = [];
+                for (let targetIndex = windowSize; targetIndex < RAW_DAYS.length; targetIndex++) {
+                    const freq = new Map();
+                    for (let h = targetIndex - windowSize; h < targetIndex; h++) {
+                        for (const n of auditLast2Numbers(RAW_DAYS[h])) freq.set(n, (freq.get(n) || 0) + 1);
+                    }
+                    const dan = [...freq.entries()].filter(([, f]) => f >= 1 && f <= 3).map(([n]) => n).sort((a, b) => Number(a) - Number(b));
+                    const actual = getLast2DB(RAW_DAYS[targetIndex].data);
+                    rows.push({ date: RAW_DAYS[targetIndex].day, actual, size: dan.length, hit: dan.includes(actual), dan, f1: [...freq.values()].filter(f => f === 1).length, f2: [...freq.values()].filter(f => f === 2).length, f3: [...freq.values()].filter(f => f === 3).length });
+                }
+                const hits = rows.filter(r => r.hit).length;
+                const avgSize = rows.length ? rows.reduce((s, r) => s + r.size, 0) / rows.length : 0;
+                const expected = rows.length ? rows.reduce((s, r) => s + r.size / 100, 0) / rows.length * 100 : 0;
+                const metrics = danAuditMetrics(rows);
+                reports.push({ windowSize, rows, hits, misses: rows.length - hits, rate: rows.length ? hits / rows.length * 100 : 0, avgSize, minSize: Math.min(...rows.map(r => r.size)), maxSize: Math.max(...rows.map(r => r.size)), expected, metrics, avgF1: rows.reduce((s, r) => s + r.f1, 0) / rows.length, avgF2: rows.reduce((s, r) => s + r.f2, 0) / rows.length, avgF3: rows.reduce((s, r) => s + r.f3, 0) / rows.length });
+            }
+            const source = RAW_DAYS.length ? `${dateLabel(RAW_DAYS[0].day)} → ${dateLabel(RAW_DAYS[RAW_DAYS.length - 1].day)}` : '--';
+            let html = `<div class="data-summary"><strong>Phạm vi:</strong> ${source} · <strong>${RAW_DAYS.length} kỳ</strong> · Mỗi dòng dùng đúng N kỳ trước và chấm GĐB kỳ sau. Khoảng nghỉ quay theo lịch vận hành không được tính là một kỳ.</div>`;
+            html += '<div class="dan-audit-table-wrap"><table class="dan-audit-table"><thead><tr><th>Cửa sổ</th><th>Số kỳ test</th><th>Trúng/bao phủ</th><th>Trượt</th><th>Tỷ lệ bao phủ</th><th>Dàn TB</th><th>Dàn min–max</th><th>Baseline theo dàn</th><th>Chênh lệch</th></tr></thead><tbody>';
+            reports.forEach(r => {
+                const delta = r.rate - r.expected;
+                const cls = delta >= 0 ? 'dan-audit-good' : 'dan-audit-warn';
+                html += `<tr><td><strong>${r.windowSize} kỳ</strong></td><td>${r.rows.length}</td><td class="dan-audit-good">${r.hits}</td><td class="dan-audit-bad">${r.misses}</td><td>${r.rate.toFixed(2)}%</td><td>${r.avgSize.toFixed(2)}</td><td>${r.minSize}–${r.maxSize}</td><td>${r.expected.toFixed(2)}%</td><td class="${cls}">${delta >= 0 ? '+' : ''}${delta.toFixed(2)} điểm</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+            html += '<div class="dan-audit-note" style="margin-top:12px;">“Trúng” ở đây nghĩa là <strong>GĐB kỳ sau nằm trong dàn</strong>. Baseline theo dàn là mức tham chiếu xấp xỉ kích thước dàn trung bình / 100; không phải xác suất dự đoán một số.</div>';
+            summary.innerHTML = html;
+            let detailHtml = '<div class="analysis-two-columns">';
+            reports.forEach((r, idx) => {
+                detailHtml += `<div class="report-card"><h4><i class="fas fa-list-check"></i> Chi tiết ${r.windowSize} kỳ · ${r.hits}/${r.rows.length}</h4><div class="dan-audit-note">Dàn TB <strong>${r.avgSize.toFixed(2)}</strong> · Thành phần TB: f1 <strong>${r.avgF1.toFixed(1)}</strong>, f2 <strong>${r.avgF2.toFixed(1)}</strong>, f3 <strong>${r.avgF3.toFixed(1)}</strong><br>Chuỗi trượt dài nhất <strong>${r.metrics.maxStreak}</strong> kỳ · Chuỗi cuối file đang mở <strong>${r.metrics.openStreak}</strong> kỳ<br>Phân bố cỡ dàn: ${Object.entries(r.metrics.bins).map(([k,v]) => `${k}: ${v}`).join(' · ')}</div><div class="dan-audit-table-wrap"><table class="dan-audit-table"><thead><tr><th>Loại chuỗi</th><th>Số lần</th><th>Ý nghĩa</th></tr></thead><tbody>${[1,2,3,4].map(n => `<tr><td>${n} kỳ trượt</td><td>${r.metrics.streakCounts[n]}</td><td>Trượt ${n} kỳ rồi trúng</td></tr>`).join('')}<tr><td>≥5 kỳ trượt</td><td>${r.metrics.streakCounts[5]}</td><td>Trượt từ 5 kỳ trở lên rồi trúng</td></tr><tr><td><strong>Chuỗi trượt dài nhất</strong></td><td><strong>${r.metrics.maxStreak} kỳ</strong></td><td>${r.metrics.maxStreak <= 4 ? 'Trong ngưỡng theo dõi' : 'Cần lưu ý'}</td></tr></tbody></table></div><div class="dan-audit-table-wrap"><table class="dan-audit-table"><thead><tr><th>Kỳ chấm</th><th>GĐB</th><th>Cỡ dàn</th><th>Kết quả</th></tr></thead><tbody>`;
+                r.rows.slice().reverse().forEach(row => { detailHtml += `<tr><td>${dateLabel(row.date)}</td><td>${row.actual}</td><td>${row.size}</td><td class="${row.hit ? 'dan-audit-good' : 'dan-audit-bad'}">${row.hit ? 'TRÚNG / NẰM TRONG DÀN' : 'TRƯỢT / NGOÀI DÀN'}</td></tr>`; });
+                detailHtml += '</tbody></table></div><details style="margin-top:12px;"><summary><strong>CHI TIẾT 100 SỐ (00–99)</strong></summary><div class="dan-audit-table-wrap" style="margin-top:8px;"><table class="dan-audit-table"><thead><tr><th>Số</th><th>Số kỳ nằm trong dàn</th><th>GĐB xuất hiện</th><th>GĐB nằm trong dàn</th><th>Trượt khi số nằm trong dàn</th><th>Tỷ lệ bao phủ số</th></tr></thead><tbody>' + renderDanNumberStats(r.metrics.numberStats) + '</tbody></table></div></details></div>';
+            });
+            detailHtml += '</div>';
+            details.innerHTML = detailHtml;
+            const status = document.getElementById('danAuditStatus');
+            if (status) status.textContent = `Đã kiểm tra cửa sổ ${reports[0]?.windowSize || '--'} kỳ · không dùng dữ liệu tương lai`;
+        }
+
+        // ================================================================
+        // LOGIC SOI VỊ TRÍ (Mô phỏng SCV6)
+        // ================================================================
+        let svtHistory = [];
+        let svtNewNumbersList = [];
+        let svtCurrentDayIndex = -1;
+        
+        function svtRenderDayTabs() {
+            if (!RAW_DAYS || RAW_DAYS.length === 0) return;
+            const container = document.getElementById('svtDayTabs');
+            
+            // Lấy tối đa 10 ngày gần nhất tính đến TARGET_INDEX
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const startIndex = Math.max(0, endIndex - 9);
+            const recentDays = RAW_DAYS.slice(startIndex, endIndex + 1).reverse();
+            
+            if (svtCurrentDayIndex < 0 || svtCurrentDayIndex >= recentDays.length) {
+                svtCurrentDayIndex = 0; // Mặc định chọn ngày mới nhất
+            }
+            
+            let html = '';
+            recentDays.forEach((day, idx) => {
+                const isActive = idx === svtCurrentDayIndex ? 'active' : '';
+                const isFull = day.data.length === 8;
+                const badgeClass = isFull ? 'svt-badge-ok' : 'svt-badge-warn';
+                const badgeLabel = isFull ? '✅ 8 giải' : `⚠️ ${day.data.length} giải`;
+                
+                html += `<div class="svt-day-tab ${isActive}" onclick="svtSelectDay(${idx}, ${startIndex}, ${endIndex})">
+                    ${dateLabel(day.day)} <span class="${badgeClass}">${badgeLabel}</span>
+                </div>`;
+            });
+            container.innerHTML = html;
+            
+            // Render ngày kế tiếp trước, sau đó đến ngày đang chọn và các ngày trước đó.
+            const selectedAbsIndex = endIndex - svtCurrentDayIndex;
+            const homeInput = document.getElementById('homeTableNumDays');
+            let homeDays = parseInt(homeInput ? homeInput.value : '1', 10);
+            if (!Number.isFinite(homeDays)) homeDays = 1;
+            homeDays = Math.max(1, Math.min(30, homeDays));
+            if (homeInput) homeInput.value = homeDays;
+            
+            const svtInput = document.getElementById('svtTableNumDays');
+            let svtDays = parseInt(svtInput ? svtInput.value : '1', 10);
+            if (!Number.isFinite(svtDays)) svtDays = 1;
+            svtDays = Math.max(1, Math.min(30, svtDays));
+            if (svtInput) svtInput.value = svtDays;
+            
+            const homeStart = Math.max(0, selectedAbsIndex - homeDays + 1);
+            const svtStart = Math.max(0, selectedAbsIndex - svtDays + 1);
+            
+            const displayHomeDays = RAW_DAYS.slice(homeStart, selectedAbsIndex + 1).reverse();
+            const displaySvtDays = RAW_DAYS.slice(svtStart, selectedAbsIndex + 1).reverse();
+            const nextDay = selectedAbsIndex < RAW_DAYS.length - 1 ? RAW_DAYS[selectedAbsIndex + 1] : null;
+            const soiDays = nextDay ? [nextDay, ...displaySvtDays] : displaySvtDays;
+            
+            svtRenderTable(recentDays[svtCurrentDayIndex], displayHomeDays, 'home');
+            svtRenderTable(recentDays[svtCurrentDayIndex], soiDays, 'svt', Boolean(nextDay));
+        }
+        
+        function svtSelectDay(idx, startIndex, endIndex) {
+            svtCurrentDayIndex = idx;
+            const recentDays = RAW_DAYS.slice(startIndex, endIndex + 1).reverse();
+            svtRenderDayTabs(); // Render lại tab để set active
+        }
+        
+        function svtUpdateTableDays(target) {
+            if (!RAW_DAYS || RAW_DAYS.length === 0) return;
+            const prefix = target === 'home' ? 'home' : 'svt';
+            const input = document.getElementById(prefix + 'TableNumDays');
+            let numDays = parseInt(input ? input.value : '1', 10);
+            if (!Number.isFinite(numDays)) numDays = 1;
+            numDays = Math.max(1, Math.min(30, numDays));
+            if (input) input.value = numDays;
+            
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const selectedAbsIndex = Math.max(0, endIndex - svtCurrentDayIndex);
+            const startIndex = Math.max(0, selectedAbsIndex - numDays + 1);
+            const displayDays = RAW_DAYS.slice(startIndex, selectedAbsIndex + 1).reverse();
+            if (displayDays.length) {
+                if (prefix === 'svt') {
+                    const nextDay = selectedAbsIndex < RAW_DAYS.length - 1 ? RAW_DAYS[selectedAbsIndex + 1] : null;
+                    svtRenderTable(displayDays[0], nextDay ? [nextDay, ...displayDays] : displayDays, prefix, Boolean(nextDay));
+                } else {
+                    svtRenderTable(displayDays[0], displayDays, prefix);
+                }
+            }
+        }
+
+        function svtRenderTable(dayObj, displayDays, prefix = 'svt', hasNextDay = false) {
+            if (!dayObj) return;
+            displayDays = Array.isArray(displayDays) && displayDays.length ? displayDays : [dayObj];
+            
+            // 1. Render bảng kết quả của ngày đang chọn và các ngày trước đó.
+            const table = document.getElementById(prefix + 'Table');
+            if (!table) return;
+            let html = '<tbody>';
+            let flatLocal = [];
+            
+            displayDays.forEach((displayDay, dayOffset) => {
+                const isNextDay = prefix === 'svt' && hasNextDay && dayOffset === 0;
+                const isSelectedDay = prefix === 'svt' ? (hasNextDay ? dayOffset === 1 : dayOffset === 0) : dayOffset === 0;
+                html += `<tr><td colspan="2" data-svt-day-header="${dayOffset}" data-svt-day-date="${dateLabel(displayDay.day)}" style="padding:6px 8px; background:rgba(79,172,254,0.08); color:#4facfe; font-size:11px; font-weight:700; border-top:${dayOffset === 0 ? '0' : '1px solid rgba(255,255,255,0.12)'};">${dateLabel(displayDay.day)}${isNextDay ? ' · Ngày kế tiếp' : isSelectedDay ? ' · Ngày đang chọn' : ''}</td></tr>`;
+                let flatDayPos = 0;
+                displayDay.data.forEach((row, rowIdx) => {
+                    html += '<tr>';
+                    const isSpecial = (rowIdx === 0);
+                    html += `<td class="label-cell"><span class="${isSpecial ? 'svt-special-label' : ''}">${row.label}</span></td>`;
+                    html += '<td class="numbers-cell">';
+                    
+                    row.numbers.forEach(num => {
+                        const numStr = String(num);
+                        html += `<span class="number-tag ${isSpecial ? 'svt-special-num' : ''}">`;
+                        const last2Value = numStr.length >= 2 ? numStr.slice(-2) : null;
+                        for (let i = 0; i < numStr.length; i++) {
+                            const pos = flatDayPos++;
+                            const dayRole = prefix === 'svt' ? (isNextDay ? 'next' : isSelectedDay ? 'selected' : `history-${dayOffset}`) : 'home';
+                            const id = `${prefix}-digit-${dayRole}-${pos}`;
+                            const isLast2 = last2Value && i >= numStr.length - 2;
+                            const last2Attrs = isLast2 ? ` svt-last2 data-last2="${last2Value}"` : '';
+                            html += `<span class="svt-digit${isLast2 ? ' svt-last2' : ''}" id="${id}" data-pos="${pos}" data-day-role="${dayRole}" data-day-offset="${dayOffset}"${last2Attrs}>${numStr[i]}</span>`;
+                            if (dayOffset === 0) flatLocal.push(numStr[i]);
+                        }
+                        html += '</span>';
+                    });
+                    
+                    html += '</td></tr>';
+                });
+            });
+            html += '</tbody>';
+            table.innerHTML = html;
+            if (prefix === 'svt') {
+                document.getElementById('svtTotalPos').textContent = flatLocal.length;
+                document.getElementById('svtCurrentDateLabel').textContent = dateLabel(dayObj.day);
+            }
+            if (prefix === 'home') {
+                document.getElementById('homeCurrentDateLabel').textContent = dateLabel(dayObj.day);
+            }
+            
+            // 2. Render Inline Stats theo đúng ngày đang chọn (không trộn với các ngày truy vết).
+            if (prefix !== 'home') return;
+            
+            const freq = {};
+            for (let i = 0; i < 10; i++) freq[i] = 0;
+            flatLocal.forEach(digit => { freq[digit] = (freq[digit] || 0) + 1; });
+            
+            const sortedFreq = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+            const top4 = sortedFreq.slice(0, 4).map(item => parseInt(item[0]));
+            
+            let freqHtml = '';
+            for (let i = 0; i < 10; i++) {
+                const isTop = top4.includes(i);
+                freqHtml += `
+                    <div class="svt-freq-box ${isTop ? 'top' : ''}">
+                        <span class="num">${i}</span>
+                        <span class="count">${freq[i]}</span>
+                    </div>
+                `;
+            }
+            document.getElementById('svtFreqInline').innerHTML = freqHtml;
+            
+            // 2.2. 2 số cuối vẫn lấy theo ngày đang chọn.
+            const last2 = [];
+            dayObj.data.forEach((row, rowIdx) => {
+                row.numbers.forEach(num => {
+                    const str = String(num);
+                    const val = str.length >= 2 ? str.slice(-2) : str.padStart(2, '0');
+                    last2.push({ val: val, isGDB: rowIdx === 0 });
+                });
+            });
+            
+            const last2Counts = {};
+            last2.forEach(item => {
+                const n = item.val;
+                const rev = n.split('').reverse().join('');
+                const key = parseInt(n) < parseInt(rev) ? n + '-' + rev : rev + '-' + n;
+                last2Counts[key] = (last2Counts[key] || 0) + 1;
+            });
+            
+            const sortedLast2 = [...last2].sort((a, b) => Number(a.val) - Number(b.val));
+            const htmlLast2Tags = sortedLast2.map(item => {
+                const n = item.val;
+                const rev = n.split('').reverse().join('');
+                const key = parseInt(n) < parseInt(rev) ? n + '-' + rev : rev + '-' + n;
+                const isDup = last2Counts[key] > 1 ? 'duplicate' : '';
+                const isGDB = item.isGDB ? 'gdb-highlight' : '';
+                return `<span class="svt-inline-tag ${isDup} ${isGDB}">${n}</span>`;
+            });
+            
+            const row1 = htmlLast2Tags.slice(0, 15).join('');
+            const row2 = htmlLast2Tags.slice(15).join('');
+            document.getElementById('svtLast2Inline').innerHTML = `
+                <div style="display:flex; flex-wrap:wrap; gap:4px; width:100%; margin-bottom:4px;">${row1}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:4px; width:100%;">${row2}</div>
+            `;
+            
+            svtRenderNewNumbersAlert(dayObj);
+        }
+        
+        let svtLastDayObjForAlert = null;
+
+        function svtRerenderNewNumbersAlert() {
+            if (svtLastDayObjForAlert) svtRenderNewNumbersAlert(svtLastDayObjForAlert);
+        }
+
+        function svtRenderNewNumbersAlert(currentDayObj) {
+            svtLastDayObjForAlert = currentDayObj;
+            const alertContainer = document.getElementById('svtNewNumbersAlert');
+            if (!RAW_DAYS || RAW_DAYS.length < 2) {
+                alertContainer.style.display = 'none';
+                return;
+            }
+            
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            // SỬA (theo yêu cầu người dùng): trước đây cố định cứng 9 ngày, không điều chỉnh được.
+            // Nay đọc từ ô nhập #svtNewNumbersWindow (mặc định 9 nếu bỏ trống/không hợp lệ),
+            // giới hạn 1-60 ngày để tránh giá trị vô lý.
+            const windowInput = document.getElementById('svtNewNumbersWindow');
+            const lookbackDays = Math.max(1, Math.min(60, parseInt(windowInput?.value, 10) || 9));
+            const startIndex = Math.max(0, endIndex - lookbackDays);
+            const recentDays = RAW_DAYS.slice(startIndex, endIndex + 1).reverse();
+            
+            if (recentDays.length < 2) {
+                alertContainer.style.display = 'none';
+                return;
+            }
+            
+            // Trích xuất 2 số cuối của tất cả các ngày trong khoảng
+            const dayStats = recentDays.map(day => {
+                const last2 = [];
+                day.data.forEach(row => {
+                    row.numbers.forEach(num => {
+                        const str = String(num);
+                        last2.push(str.length >= 2 ? str.slice(-2) : str.padStart(2, '0'));
+                    });
+                });
+                return { date: dateLabel(day.day), last2 };
+            });
+            
+            // Ngày đang chọn (coi như "yesterday" trong SCV6)
+            const currentIndex = recentDays.findIndex(d => d.day === currentDayObj.day);
+            if (currentIndex < 0 || currentIndex === recentDays.length - 1) {
+                // Không có ngày trước đó để so sánh
+                alertContainer.style.display = 'none';
+                return;
+            }
+            
+            const currentDayStats = dayStats[currentIndex];
+            const currentNumbers = new Set(currentDayStats.last2);
+            
+            // Tất cả các ngày TRƯỚC ngày đang chọn
+            const previousDays = dayStats.slice(currentIndex + 1);
+            const previousNumbers = new Set();
+            previousDays.forEach(day => day.last2.forEach(num => previousNumbers.add(num)));
+            
+            // Tìm số mới
+            const newNumbers = [];
+            currentNumbers.forEach(num => {
+                if (!previousNumbers.has(num)) newNumbers.push(num);
+            });
+            
+            // Tìm cặp mới (tùy chọn, để đơn giản ta chỉ báo số mới)
+            newNumbers.sort((a, b) => Number(a) - Number(b));
+            svtNewNumbersList = newNumbers;
+            const hasNew = newNumbers.length > 0;
+            
+            alertContainer.style.display = 'block';
+            if (!hasNew) {
+                alertContainer.className = 'svt-alert no-alert';
+                alertContainer.innerHTML = `
+                    <div class="svt-alert-header">
+                        <span class="svt-alert-icon">✅</span>
+                        <span class="svt-alert-title ok">Không có số mới xuất hiện</span>
+                        <span class="svt-alert-date">So với ${previousDays.length} ngày trước</span>
+                    </div>
+                `;
+            } else {
+                alertContainer.className = 'svt-alert';
+                alertContainer.innerHTML = `
+                    <div class="svt-alert-header">
+                        <span class="svt-alert-icon">🚨</span>
+                        <span class="svt-alert-title">Phát hiện ${newNumbers.length} số mới xuất hiện!</span>
+                        <span class="svt-alert-date">So với ${previousDays.length} ngày trước</span>
+                    </div>
+                    <div class="svt-alert-numbers">
+                        ${newNumbers.map(num => `<span class="svt-alert-number">${num}</span>`).join('')}
+                    </div>
+                    <div style="margin-top:10px;">
+                        <button class="btn btn-secondary" onclick="copySvtNewNumbers()" id="btnCopySvtNewNumbers" style="padding:6px 12px;"><i class="fas fa-copy"></i> Sao chép số mới</button>
+                    </div>
+                `;
+            }
+        }
+
+        function copySvtNewNumbers() {
+            if (!svtNewNumbersList.length) return;
+            const text = svtNewNumbersList.join(' ');
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            const btn = document.getElementById('btnCopySvtNewNumbers');
+            if (btn) {
+                const oldHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Đã chép';
+                setTimeout(() => { btn.innerHTML = oldHtml; }, 2000);
+            }
+        }
+        
+        function svtProcess() {
+            const rawP1 = document.getElementById('svtPos1').value.trim();
+            const rawP2 = document.getElementById('svtPos2').value.trim();
+            const p1 = Number(rawP1);
+            const p2 = Number(rawP2);
+            
+            if (!rawP1 || !rawP2 || !Number.isInteger(p1) || !Number.isInteger(p2) || p1 < 0 || p1 > 106 || p2 < 0 || p2 > 106) {
+                alert('Vui lòng nhập vị trí nguyên từ 0 đến 106');
+                return;
+            }
+            if (p1 === p2) {
+                alert('Vị trí 1 và Vị trí 2 phải là hai vị trí khác nhau.');
+                return;
+            }
+            
+            // Xóa highlight cũ trên bảng Soi vị trí
+            document.querySelectorAll('#svtTable .svt-digit').forEach(el => {
+                el.classList.remove('highlight', 'pred-highlight', 'pred-straight', 'pred-inverted', 'pred-both');
+            });
+            
+            // Đánh dấu vị trí trên ngày đang chọn và các ngày lịch sử đang hiển thị.
+            // Riêng ngày kế tiếp chỉ dành cho lớp màu vàng đối chiếu, không tô highlight vị trí.
+            const els1 = document.querySelectorAll(`#svtTable .svt-digit[data-day-role]:not([data-day-role="next"])[data-pos="${p1}"]`);
+            const els2 = document.querySelectorAll(`#svtTable .svt-digit[data-day-role]:not([data-day-role="next"])[data-pos="${p2}"]`);
+            
+            if (!els1.length || !els2.length) { alert('Vị trí vượt quá giới hạn dữ liệu của ngày này.'); return; }
+            
+            els1.forEach(el => el.classList.add('highlight'));
+            els2.forEach(el => el.classList.add('highlight'));
+            
+            const el1 = document.querySelector(`#svtTable .svt-digit[data-day-role="selected"][data-pos="${p1}"]`) || els1[0];
+            const el2 = document.querySelector(`#svtTable .svt-digit[data-day-role="selected"][data-pos="${p2}"]`) || els2[0];
+            const d1 = el1.textContent;
+            const d2 = el2.textContent;
+            
+            // Truy vết tuần tự: mỗi ngày nguồn tạo một cặp thuận/đảo,
+            // sau đó đối chiếu với 2 số cuối của toàn bộ giải ở ngày kế tiếp.
+            const table = document.getElementById('svtTable');
+            const allDigits = [...table.querySelectorAll('.svt-digit[data-day-offset][data-pos]')];
+            const offsets = [...new Set(allDigits.map(el => Number(el.getAttribute('data-day-offset'))))]
+                .filter(offset => Number.isFinite(offset) && offset > 0)
+                .sort((a, b) => a - b);
+            const headerByOffset = new Map([...table.querySelectorAll('[data-svt-day-header]')]
+                .map(el => [Number(el.getAttribute('data-svt-day-header')), el.getAttribute('data-svt-day-date')]));
+            const traceRows = [];
+            let straightSteps = 0;
+            let invertedSteps = 0;
+            let bothSteps = 0;
+            let breakSteps = 0;
+            let currentRun = 0;
+            let longestRun = 0;
+            const escapeTrace = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+            
+            offsets.forEach(sourceOffset => {
+                const sourceDigits = allDigits.filter(el => Number(el.getAttribute('data-day-offset')) === sourceOffset);
+                const source1 = sourceDigits.find(el => Number(el.getAttribute('data-pos')) === p1);
+                const source2 = sourceDigits.find(el => Number(el.getAttribute('data-pos')) === p2);
+                if (!source1 || !source2) return;
+                
+                const sourcePair = source1.textContent + source2.textContent;
+                const sourceReverse = source2.textContent + source1.textContent;
+                const sameDirection = sourcePair === sourceReverse;
+                const targetOffset = sourceOffset - 1;
+                const targetTags = [...table.querySelectorAll('.number-tag')].filter(tag =>
+                    [...tag.querySelectorAll(`.svt-digit[data-day-offset="${targetOffset}"]`)].length > 0
+                );
+                const matchedStraight = new Set();
+                const matchedInverted = new Set();
+                const matchedBoth = new Set();
+                const matchDetails = [];
+                
+                targetTags.forEach(tag => {
+                    const last2El = tag.querySelector(`.svt-last2[data-day-offset="${targetOffset}"]`);
+                    if (!last2El) return;
+                    const value = last2El.getAttribute('data-last2');
+                    const isStraight = value === sourcePair;
+                    const isInverted = !sameDirection && value === sourceReverse;
+                    const isBoth = sameDirection && isStraight;
+                    if (!isStraight && !isInverted) return;
+                    
+                    const rowLabel = tag.closest('tr')?.querySelector('.label-cell')?.textContent.trim() || 'Giải';
+                    const numberText = tag.textContent.trim();
+                    const detail = `${rowLabel} ${numberText} → đuôi ${value}`;
+                    tag.querySelectorAll(`.svt-last2[data-day-offset="${targetOffset}"]`).forEach(el => {
+                        el.classList.add('pred-highlight');
+                        if (isBoth) el.classList.add('pred-both');
+                        else if (isStraight) el.classList.add('pred-straight');
+                        else if (isInverted) el.classList.add('pred-inverted');
+                    });
+                    if (isBoth) {
+                        matchedBoth.add(value);
+                        matchDetails.push({ type: 'both', value, detail });
+                    } else if (isStraight) {
+                        matchedStraight.add(value);
+                        matchDetails.push({ type: 'straight', value, detail });
+                    } else {
+                        matchedInverted.add(value);
+                        matchDetails.push({ type: 'inverted', value, detail });
+                    }
+                });
+                
+                const targetDate = headerByOffset.get(targetOffset) || 'ngày kế tiếp';
+                const sourceDate = headerByOffset.get(sourceOffset) || 'ngày nguồn';
+                const isMatch = matchedStraight.size > 0 || matchedInverted.size > 0 || matchedBoth.size > 0;
+                if (matchedStraight.size) straightSteps++;
+                if (matchedInverted.size) invertedSteps++;
+                if (matchedBoth.size) bothSteps++;
+                if (isMatch) {
+                    currentRun++;
+                    longestRun = Math.max(longestRun, currentRun);
+                } else {
+                    breakSteps++;
+                    currentRun = 0;
+                }
+                const matchParts = [];
+                if (matchedStraight.size) matchParts.push(`Không đảo: ${[...matchedStraight].join(' · ')}`);
+                if (matchedInverted.size) matchParts.push(`Đảo: ${[...matchedInverted].join(' · ')}`);
+                if (matchedBoth.size) matchParts.push(`Kép hai chiều: ${[...matchedBoth].join(' · ')}`);
+                const detailsHtml = matchDetails.length
+                    ? `<div class="svt-trace-detail">${matchDetails.map(item => `<span class="svt-trace-hit ${item.type}">${escapeTrace(item.detail)}</span>`).join('')}</div>`
+                    : '';
+                traceRows.push(`<div class="svt-trace-row ${isMatch ? 'match' : 'break'}"><strong>${escapeTrace(sourceDate)}</strong>: ${escapeTrace(sourcePair)}/${escapeTrace(sourceReverse)} → ${escapeTrace(targetDate)} <span class="svt-trace-status">${isMatch ? `KHỚP · ${matchParts.join(' · ')}` : 'GÃY'}</span>${detailsHtml}</div>`);
+            });
+            
+            const traceSummary = document.getElementById('svtTraceSummary');
+            if (traceSummary) {
+                traceSummary.innerHTML = traceRows.length
+                    ? `<div style="color:#aab8cc; margin-bottom:3px; font-weight:700;">Truy vết từng ngày</div><div class="svt-trace-stats">Đã kiểm tra ${offsets.length} bước · Không đảo ${straightSteps} · Đảo ${invertedSteps} · Kép hai chiều ${bothSteps} · Gãy ${breakSteps} · Chuỗi liên tục dài nhất ${longestRun}</div>${traceRows.join('')}`
+                    : 'Chưa đủ ngày để truy vết.';
+            }
+            
+            document.getElementById('svtResultDisplay').innerHTML = `<span style="color:#4ade80;">${d1}</span><span style="color:var(--color-v2);">${d2}</span>`;
+            
+            // Lưu lịch sử
+            svtHistory.unshift({ p1, p2, d1, d2 });
+            if (svtHistory.length > 10) svtHistory.pop();
+            
+            svtRenderHistory();
+        }
+        
+        function svtRenderHistory() {
+            const list = document.getElementById('svtHistoryList');
+            if (svtHistory.length === 0) {
+                list.innerHTML = '<div style="color:#5a6a8a; font-size:12px; text-align:center; padding:10px;">Chưa có lịch sử</div>';
+                return;
+            }
+            
+            list.innerHTML = svtHistory.map(h => `
+                <div class="svt-history-item" style="justify-content: flex-start; gap: 12px; align-items: center;">
+                    <span style="color:#7a8aaa; font-weight:600; min-width:80px;">VT ${h.p1} × ${h.p2}</span>
+                    <span style="color:#5a6a8a; font-size:10px;">→</span>
+                    <span class="svt-history-val">${h.d1}${h.d2}</span>
+                </div>
+            `).join('');
+        }
+        
+        function svtClearHistory() {
+            svtHistory = [];
+            svtRenderHistory();
+        }
+
+        // Khởi tạo tab khi được mở (Gọi từ switchTab)
+        function svtInit() {
+            svtRenderDayTabs();
+            svtRenderHistory();
+        }
+
+        // ================================================================
+        // LOGIC PHÂN TÍCH XU HƯỚNG (Nút Cập nhật)
+        // ================================================================
+        function analyzeSoiViTri() {
+            if (!RAW_DAYS || RAW_DAYS.length === 0) {
+                alert('Chưa có dữ liệu TXT.');
+                return;
+            }
+            
+            let numDays = parseInt(document.getElementById('svtNumDays').value);
+            if (isNaN(numDays) || numDays < 2) numDays = 2;
+            if (numDays > 30) numDays = 30;
+            document.getElementById('svtNumDays').value = numDays;
+            
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const startIndex = Math.max(0, endIndex - numDays + 1);
+            const recentDays = RAW_DAYS.slice(startIndex, endIndex + 1);
+            
+            if (recentDays.length < 2) {
+                alert('Cần ít nhất 2 ngày dữ liệu để phân tích xu hướng.');
+                return;
+            }
+            
+            const dayStats = recentDays.map(day => {
+                const last2 = [];
+                day.data.forEach(row => {
+                    row.numbers.forEach(num => {
+                        const str = String(num);
+                        if (str.length >= 2) last2.push(str.slice(-2));
+                        else last2.push(str.padStart(2, '0'));
+                    });
+                });
+                return { date: day.day, last2 };
+            });
+            
+            // Ngày mới nhất (trong khoảng phân tích)
+            const latest = dayStats[dayStats.length - 1];
+            const latestNumbers = new Set(latest.last2);
+            
+            // Các ngày trước đó
+            const previousDays = dayStats.slice(0, dayStats.length - 1);
+            const previousNumbers = new Set();
+            previousDays.forEach(day => day.last2.forEach(num => previousNumbers.add(num)));
+            
+            // 1. Số mới xuất hiện
+            const newNumbers = [];
+            latestNumbers.forEach(num => {
+                if (!previousNumbers.has(num)) newNumbers.push(num);
+            });
+            
+            // 2. Tần suất tổng cộng
+            const totalFreq = {};
+            dayStats.forEach(day => {
+                day.last2.forEach(num => { totalFreq[num] = (totalFreq[num] || 0) + 1; });
+            });
+            
+            const sortedByFreq = Object.entries(totalFreq).sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]));
+            const hotNumbers = sortedByFreq.slice(0, 10).map(item => item[0]);
+            
+            // 3. Xu hướng tăng (Nửa sau vs Nửa đầu)
+            const volatility = {};
+            const mid = Math.floor(dayStats.length / 2);
+            const firstHalf = dayStats.slice(0, mid);
+            const secondHalf = dayStats.slice(mid);
+            
+            const firstFreq = {};
+            firstHalf.forEach(day => day.last2.forEach(num => { firstFreq[num] = (firstFreq[num] || 0) + 1; }));
+            
+            const secondFreq = {};
+            secondHalf.forEach(day => day.last2.forEach(num => { secondFreq[num] = (secondFreq[num] || 0) + 1; }));
+            
+            const allNums = new Set([...Object.keys(firstFreq), ...Object.keys(secondFreq)]);
+            const firstDays = Math.max(1, firstHalf.length);
+            const secondDays = Math.max(1, secondHalf.length);
+            allNums.forEach(num => {
+                const firstAvg = (firstFreq[num] || 0) / firstDays;
+                const secondAvg = (secondFreq[num] || 0) / secondDays;
+                // So sánh tần suất trung bình/ngày, không so sánh tổng lượt,
+                // để nửa đầu và nửa sau công bằng khi cửa sổ có số ngày lẻ.
+                volatility[num] = secondAvg - firstAvg;
+            });
+            
+            const trendingUp = Object.entries(volatility)
+                .filter(([num, change]) => change > 0)
+                .sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]))
+                .slice(0, 8)
+                .map(item => item[0]);
+                
+            // Hiển thị ngày
+            const dateChain = [...recentDays].reverse().map(d => dateLabel(d.day)).join(' → ');
+            document.getElementById('svtDates').innerHTML = `<span class="d active" style="background:transparent; color:#a0b0c0; border:none;">📅 Phân tích: ${dateChain}</span>`;
+            
+            // Render HTML (Grid Box SCV6 style)
+            let html = `
+                <div class="svt-box-grid">
+                    <div class="svt-box hot">
+                        <div class="svt-box-title">🔥 Số nóng</div>
+                        <div class="svt-box-nums">
+                            ${hotNumbers.slice(0,5).sort((a, b) => Number(a) - Number(b)).map(num => `<span class="svt-box-num">${num}</span>`).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="svt-box cold">
+                        <div class="svt-box-title">❄️ Số lạnh</div>
+                        <div class="svt-box-nums">
+                            ${sortedByFreq.slice(-5).map(item => item[0]).sort((a, b) => Number(a) - Number(b)).map(num => `<span class="svt-box-num">${num}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="svt-box up" style="margin-bottom:15px;">
+                    <div class="svt-box-title"><i class="fas fa-arrow-trend-up"></i> Số đang có xu hướng tăng</div>
+                    <div class="svt-box-nums">
+                        ${trendingUp.length > 0 
+                            ? trendingUp.slice().sort((a, b) => Number(a) - Number(b)).map(num => `<span class="svt-box-num">${num}</span>`).join('')
+                            : '<span style="color:#5a6a8a; font-size:12px;">Chưa có số nào tăng rõ rệt</span>'
+                        }
+                    </div>
+                </div>
+                
+                <div class="svt-box new">
+                    <div class="svt-box-title"><i class="fas fa-leaf"></i> Số mới xuất hiện (Ngày ${dateLabel(latest.date)})</div>
+                    <div class="svt-box-nums">
+                        ${newNumbers.length > 0 
+                            ? newNumbers.slice().sort((a, b) => Number(a) - Number(b)).map(num => `<span class="svt-box-num">${num}</span>`).join('')
+                            : '<span style="color:#5a6a8a; font-size:12px;">Không có số mới</span>'
+                        }
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('svtContent').innerHTML = html;
+        }
+
+        // ================================================================
+        // XUẤT SỐ CẦU THEO ĐỘ DÀI CHUỖI
+        // ================================================================
+        function exportCauNumbersByDays(dayCount) {
+            const n = Number(dayCount);
+            if (n !== 1 && n !== 2) return;
+            const rows = Array.isArray(currentRows) ? currentRows : [];
+            const values = [...new Set(rows
+                .filter(row => Number(row.soNgayChay) === n)
+                .map(row => String(row.pred ?? '').replace(/\D/g, '').slice(-2).padStart(2, '0'))
+                .filter(value => /^\d{2}$/.test(value)))]
+                .sort((a, b) => Number(a) - Number(b));
+
+            const label = n === 1 ? 'CẦU 1N' : 'CẦU 2N';
+            const targetIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const targetLabel = RAW_DAYS[targetIndex]?.day || 'chưa chọn mốc';
+            const content = [
+                `SỐ CẦU ${n}N - GDBV60`,
+                `Mốc dữ liệu: ${targetLabel}`,
+                `Không phân biệt Thuận/Đảo/Hỗn hợp`,
+                `Đã loại số trùng và sắp xếp tăng dần`,
+                `Tổng số: ${values.length}`,
+                '',
+                values.join(' '),
+                ''
+            ].join('\n');
+            const blob = new Blob([`\uFEFF${content}`], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `so-cau-${n}N-tang-dan.txt`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            if (typeof setStatus === 'function') setStatus('complete');
+        }
+
+        // ================================================================
+        // LOGIC TÌM CẦU
+        // ================================================================
+        function scan() {
+            setStatus('analyzing');
+
+            if (!HISTORY_DATA || HISTORY_DATA.length < 2) {
+                setStatus('ready');
+                clearSelectedDays('⚠️ Cần chọn ngày có ít nhất 1 ngày trước đó để soi cầu');
+                return;
+            }
+
+            setTimeout(() => {
+                const n = HISTORY_DATA.length;
+                const results = [];
+                const maxPos = 107;
+                
+                for (let a = 0; a < maxPos; a++) {
+                    for (let b = a + 1; b < maxPos; b++) {
+                        const pattern = [];
+                        const historyArr = [];
+
+                        for (let t = n - 2; t >= 0; t--) {
+                            const p = String(HISTORY_DATA[t][a]) + String(HISTORY_DATA[t][b]);
+                            const pRev = String(HISTORY_DATA[t][b]) + String(HISTORY_DATA[t][a]);
+                            const db = getLast2DB(RAW_DAYS[t + 1].data);
+                            const isSame = p === pRev; // A=B: khớp cả 2 chiều cùng lúc, không nói lên hướng nào
+
+                            if (p === db) {
+                                pattern.unshift(isSame ? 'S' : 'E');
+                                historyArr.unshift(p);
+                            } else if (pRev === db) {
+                                pattern.unshift('I');
+                                historyArr.unshift(pRev);
+                            } else {
+                                break;
+                            }
+                        }
+
+                        const soNgayChay = pattern.length;
+                        if (soNgayChay < 1) continue;
+
+                        // Chỉ tính bằng chứng hướng THẬT (E/I) — 'S' (trùng cả 2 chiều) không được
+                        // tính vào bất kỳ hướng nào, tránh ép một chuỗi Đảo/Thuận thật thành "Hỗn hợp"
+                        // chỉ vì trong chuỗi có 1 ngày trùng ngẫu nhiên (A=B).
+                        const hasE = pattern.includes('E');
+                        const hasI = pattern.includes('I');
+                        const type = (hasE && hasI) ? 'Hỗn hợp' : (hasE ? 'Toàn Thuận' : (hasI ? 'Toàn Đảo' : 'Toàn SAME'));
+                        const predStraight = String(HISTORY_DATA[n - 1][a]) + String(HISTORY_DATA[n - 1][b]);
+                        const predInverted = String(HISTORY_DATA[n - 1][b]) + String(HISTORY_DATA[n - 1][a]);
+
+                        const pred = hasI ? predInverted : predStraight;
+                        historyArr.push(pred);
+
+                        results.push({
+                            a, b, type, soNgayChay, pred, predStraight, predInverted,
+                            pattern: pattern.join('-'), historyArr
+                        });
+                    }
+                }
+
+                results.sort((x, y) => y.soNgayChay - x.soNgayChay || x.a - y.a || x.b - y.b);
+                currentRows = results;
+                renderResults(results);
+                setStatus('complete');
+                if (document.getElementById('tabDashboard').classList.contains('active')) {
+                    renderDashboard();
+                }
+            }, 50);
+        }
+
+        function renderResults(rows) {
+            updateStats(rows);
+            renderCauList(rows, currentFilter);
+
+            if (rows.length === 0) {
+                renderXS(-1, -1);
+                return;
+            }
+
+            const hero = rows[0];
+            renderXS(hero.a, hero.b);
+        }
+
+        function setStatus(state) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const badge = document.getElementById('cauStatusBadge');
+            
+            dot.className = 'dot';
+            if (state === 'ready') { 
+                dot.classList.add('ready');
+                text.textContent = 'READY';
+                if(badge) {
+                    badge.textContent = 'Đang chờ soi cầu...';
+                    badge.style.color = '#a0b0c0';
+                    badge.style.borderColor = 'rgba(255,255,255,0.1)';
+                    badge.style.background = 'rgba(255,255,255,0.02)';
+                }
+            } else if (state === 'analyzing') { 
+                dot.classList.add('analyzing');
+                text.textContent = 'ANALYZING';
+                if(badge) {
+                    badge.textContent = 'Đang quét...';
+                    badge.style.color = '#f1c40f';
+                    badge.style.borderColor = 'rgba(241,196,15,0.3)';
+                    badge.style.background = 'rgba(241,196,15,0.1)';
+                }
+            } else { 
+                dot.classList.add('complete');
+                text.textContent = 'COMPLETE';
+                if(badge) {
+                    badge.textContent = `Đã quét ${currentRows ? currentRows.length : 0} cầu`;
+                    badge.style.color = '#4ade80';
+                    badge.style.borderColor = 'rgba(74,222,128,0.3)';
+                    badge.style.background = 'rgba(74,222,128,0.1)';
+                }
+            }
+        }
+
+        function loadSample() {
+            RAW_DAYS = DAYS_DATA.map((data, index) => ({ day: ['18-08-2026', '19-08-2026', '20-08-2026'][index], data }));
+            updateDateDropdown();
+            document.getElementById('targetDate').value = String(RAW_DAYS.length - 1);
+            selectThreeDays(RAW_DAYS.length - 1);
+            const sampleStatus = document.getElementById('uploadStatus');
+            if (sampleStatus) {
+                sampleStatus.innerHTML = '<i class="fas fa-flask"></i> Đang dùng dữ liệu mẫu · hãy nạp TXT để phân tích chính thức';
+                sampleStatus.style.color = '#fbbf24';
+            }
+            const sampleSummary = document.getElementById('dataSummary');
+            if (sampleSummary) {
+                sampleSummary.style.display = 'block';
+                sampleSummary.innerHTML = '<strong>Trạng thái:</strong> Đang dùng dữ liệu mẫu 3 ngày. Hãy nạp TXT để phân tích dữ liệu thật.';
+            }
+        }
+
+        // ================================================================
+        // OFFLINE AGENT CONTROL API — API chính thức cho AI agent cục bộ
+        // Agent gọi nghiệp vụ qua DOM/JavaScript, không phụ thuộc tọa độ chuột.
+        // ================================================================
+        let AGENT_OPERATION = { action: 'idle', status: 'idle', startedAt: null, finishedAt: null, error: null };
+        let AGENT_OPERATION_SEQ = 0;
+        const AGENT_TAB_IDS = ['tabDashboard', 'tabTimCau', 'tabSoiViTri', 'tabDanSo', 'tabDanAudit', 'tabPhanTich', 'tabCauHinh'];
+
+        function agentWaitUntil(predicate, timeout = 120000, interval = 60) {
+            return new Promise((resolve, reject) => {
+                const started = Date.now();
+                const tick = () => {
+                    try {
+                        const value = predicate();
+                        if (value) return resolve(value);
+                    } catch (error) { return reject(error); }
+                    if (Date.now() - started >= timeout) return reject(new Error('Hết thời gian chờ thao tác AI agent.'));
+                    setTimeout(tick, interval);
+                };
+                tick();
+            });
+        }
+
+        function agentState() {
+            const active = document.querySelector('.tab-content.active');
+            const activeNav = document.querySelector('#navLinks span.active');
+            const a = Number(document.getElementById('svtPos1')?.value);
+            const b = Number(document.getElementById('svtPos2')?.value);
+            return {
+                apiVersion: '1.1.0', appVersion: 'V60', offline: true,
+                activeTab: active?.id || null, activeTabLabel: activeNav?.innerText?.trim() || null,
+                dataLoaded: Array.isArray(RAW_DAYS) && RAW_DAYS.length > 0,
+                totalDays: Array.isArray(RAW_DAYS) ? RAW_DAYS.length : 0,
+                dateFrom: RAW_DAYS?.[0]?.day || null, dateTo: RAW_DAYS?.[RAW_DAYS.length - 1]?.day || null,
+                targetIndex: TARGET_INDEX, targetDate: TARGET_INDEX >= 0 ? RAW_DAYS[TARGET_INDEX]?.day || null : null,
+                historyDays: Array.isArray(HISTORY_DATA) ? HISTORY_DATA.length : 0,
+                currentRows: Array.isArray(currentRows) ? currentRows.length : 0,
+                selectedPositions: Number.isInteger(a) && Number.isInteger(b) ? [a, b] : null,
+                soiResult: document.getElementById('svtResultDisplay')?.innerText?.trim() || null,
+                uploadStatus: document.getElementById('uploadStatus')?.innerText?.trim() || '',
+                scanStatus: document.getElementById('cauStatusBadge')?.innerText?.trim() || '',
+                analysisStatus: document.getElementById('analysisStatus')?.innerText?.trim() || '',
+                operation: { ...AGENT_OPERATION }
+            };
+        }
+
+        function agentRequireData(minDays = 3) {
+            if (!Array.isArray(RAW_DAYS) || RAW_DAYS.length < minDays) throw new Error(`Cần nạp ít nhất ${minDays} ngày dữ liệu TXT trước khi thao tác.`);
+        }
+
+        function agentRun(action, operation) {
+            const id = ++AGENT_OPERATION_SEQ;
+            AGENT_OPERATION = { id, action, status: 'running', startedAt: new Date().toISOString(), finishedAt: null, error: null };
+            try {
+                const result = operation();
+                const finish = value => {
+                    AGENT_OPERATION = { ...AGENT_OPERATION, status: 'completed', finishedAt: new Date().toISOString() };
+                    const data = value && typeof value === 'object' ? { ...value, operation: { ...AGENT_OPERATION } } : (value ?? agentState());
+                    return { ok: true, action, status: 'completed', id, data };
+                };
+                if (result && typeof result.then === 'function') return result.then(finish).catch(error => agentFailure(action, id, error));
+                return Promise.resolve(finish(result));
+            } catch (error) { return Promise.resolve(agentFailure(action, id, error)); }
+        }
+
+        function agentFailure(action, id, error) {
+            AGENT_OPERATION = { ...AGENT_OPERATION, status: 'error', finishedAt: new Date().toISOString(), error: error.message };
+            return { ok: false, action, status: 'error', id, error: error.message, state: agentState() };
+        }
+
+        function agentConfigSnapshot() {
+            const ids = ['cfgBlink','cfgHover','cfgColorA','cfgColorB','cfgColorSpecial','cfgColorDup','cfgPulse','cfgFontSize','cfgDetailDefault','cfgAnalysisDefault','cfgTableBg','cfgTextColor','cfgBodyBg','cfgCardBg','cfgRadius','cfgBlur','cfgDanFreq1','cfgDanFreq2','cfgDanFreq3','cfgDanFreq4','cfgDanFreqHigh'];
+            const result = {};
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                result[id.replace(/^cfg/, '').replace(/^./, ch => ch.toLowerCase())] = el.type === 'checkbox' ? el.checked : el.value;
+            });
+            return result;
+        }
+
+        function agentSetConfig(patch = {}) {
+            const allowed = ['blink','hover','colorA','colorB','colorSpecial','colorDup','pulse','fontSize','detailDefault','analysisDefault','tableBg','textColor','bodyBg','cardBg','radius','blur','danFreq1','danFreq2','danFreq3','danFreq4','danFreqHigh'];
+            const selectRules = { fontSize: ['small','normal','large'], detailDefault: ['closed','open'], analysisDefault: ['closed','open'], radius: ['normal','sharp','round'] };
+            const colorKeys = allowed.filter(key => key.toLowerCase().includes('color') || key === 'tableBg' || key === 'textColor' || key === 'bodyBg' || key === 'cardBg' || key.startsWith('danFreq'));
+            Object.keys(patch).forEach(key => {
+                if (!allowed.includes(key)) throw new Error(`Khóa cấu hình không hợp lệ: ${key}`);
+                if (selectRules[key] && !selectRules[key].includes(patch[key])) throw new Error(`Giá trị cấu hình không hợp lệ: ${key}`);
+                if (colorKeys.includes(key) && !/^#[0-9a-f]{6}$/i.test(String(patch[key]))) throw new Error(`Màu không hợp lệ: ${key}`);
+                if (['blink','hover','pulse','blur'].includes(key) && typeof patch[key] !== 'boolean') throw new Error(`Cấu hình ${key} phải là true/false.`);
+                const el = document.getElementById('cfg' + key.charAt(0).toUpperCase() + key.slice(1));
+                if (!el) throw new Error(`Không tìm thấy cấu hình: ${key}`);
+                if (el.type === 'checkbox') el.checked = patch[key]; else el.value = String(patch[key]);
+            });
+            saveConfig();
+            return agentConfigSnapshot();
+        }
+
+        window.XSMB_AGENT = {
+            apiVersion: '1.1.0', getState: () => agentState(), getOperation: () => ({ ...AGENT_OPERATION }),
+            switchTab: tabId => agentRun('switchTab', () => {
+                if (!AGENT_TAB_IDS.includes(tabId)) throw new Error(`Tab không hợp lệ: ${tabId}`);
+                switchTab(tabId); return agentState();
+            }),
+            loadText: (text, fileName = 'agent-data.txt') => agentRun('loadText', () => {
+                if (typeof text !== 'string' || !text.trim()) throw new Error('Nội dung TXT trống.');
+                const file = new File([text], String(fileName), { type: 'text/plain' });
+                handleFileUpload({ target: { files: [file], value: '' } });
+                return agentWaitUntil(() => {
+                    const status = document.getElementById('uploadStatus')?.innerText || '';
+                    const scanStatus = document.getElementById('cauStatusBadge')?.innerText || '';
+                    if (status.includes('Đã tải:') && scanStatus.includes('Đã quét')) return agentState();
+                    if (status.includes('File không hợp lệ')) throw new Error(status);
+                    return false;
+                });
+            }),
+            selectDate: indexOrDate => agentRun('selectDate', () => {
+                agentRequireData(2); let index = Number(indexOrDate);
+                if (!Number.isInteger(index)) index = RAW_DAYS.findIndex(item => item.day === String(indexOrDate));
+                if (!Number.isInteger(index) || index < 1 || index >= RAW_DAYS.length) throw new Error(`Mốc ngày không hợp lệ: ${indexOrDate}`);
+                selectThreeDays(index);
+                return agentWaitUntil(() => document.getElementById('cauStatusBadge')?.innerText?.includes('Đã quét') ? agentState() : false);
+            }),
+            scan: options => agentRun('scan', () => {
+                agentRequireData(2);
+                const requested = options && options.targetIndex !== undefined ? Number(options.targetIndex) : TARGET_INDEX;
+                if (!Number.isInteger(requested) || requested < 1 || requested >= RAW_DAYS.length) selectThreeDays(RAW_DAYS.length - 1);
+                else if (options && options.targetIndex !== undefined) selectThreeDays(requested);
+                else scan();
+                return agentWaitUntil(() => document.getElementById('cauStatusBadge')?.innerText?.includes('Đã quét') ? agentState() : false);
+            }),
+            setFilter: type => agentRun('setFilter', () => {
+                if (!['all','straight','inverted','mixed'].includes(type)) throw new Error(`Bộ lọc cầu không hợp lệ: ${type}`);
+                setFilter(type); return { ...agentState(), filter: currentFilter, dayFilter: currentDayFilter };
+            }),
+            setDayFilter: day => agentRun('setDayFilter', () => {
+                const normalized = String(day);
+                if (!['all','1','2','3','4+'].includes(normalized)) throw new Error(`Bộ lọc số ngày không hợp lệ: ${day}`);
+                setDayFilter(normalized); return { ...agentState(), filter: currentFilter, dayFilter: currentDayFilter };
+            }),
+            clickNumber: (dayIdx, startPos, numStr) => agentRun('clickNumber', () => {
+                const d = Number(dayIdx), p = Number(startPos);
+                if (!Number.isInteger(d) || !Number.isInteger(p) || d < 0 || p < 0 || typeof numStr !== 'string') throw new Error('Tham số clickNumber không hợp lệ.');
+                clickNumber(d, p, numStr); return { ...agentState(), clickedNumber: { dayIdx: d, startPos: p, numStr } };
+            }),
+            selectRun2Chip: (chipIndex, rowIdx, endIndex, a, b, pred, runLen = 2) => agentRun('selectRun2Chip', () => {
+                const i = Number(chipIndex); const chip = document.querySelectorAll('.run2-chip')[i];
+                if (!Number.isInteger(i) || !chip) throw new Error(`Không tìm thấy chip cầu tại chỉ số: ${chipIndex}`);
+                selectRun2Chip(chip, Number(rowIdx), Number(endIndex), Number(a), Number(b), String(pred), Number(runLen));
+                return { ...agentState(), chipIndex: i, chipType: 'run2', chipOpen: Boolean(document.querySelector('.run2-shared.open')) };
+            }),
+            selectCombinedChip: (chipIndex, endIndex, a, b, value) => agentRun('selectCombinedChip', () => {
+                const i = Number(chipIndex); const chips = document.querySelectorAll('.run2-chip'); const chip = chips[i];
+                if (!Number.isInteger(i) || !chip) throw new Error(`Không tìm thấy chip tổng hợp tại chỉ số: ${chipIndex}`);
+                selectCombinedChip(chip, Number(endIndex), Number(a), Number(b), String(value));
+                return { ...agentState(), chipIndex: i, chipType: 'combined', chipOpen: Boolean(document.getElementById('run2-shared-combined')?.classList.contains('open')) };
+            }),
+            openCauDetail: index => agentRun('openCauDetail', () => {
+                const i = Number(index); const row = currentRows?.[i];
+                if (!Number.isInteger(i) || !row) throw new Error(`Không tìm thấy cầu tại chỉ số: ${index}`);
+                showDetailPanel(i, row.a, row.b, row.pred, row.type, row.soNgayChay, row.historyArr.join(','), row.pattern || '');
+                return { ...agentState(), detailOpen: true, detailExpanded, cauIndex: i, cau: { a: row.a, b: row.b, pred: row.pred, type: row.type, days: row.soNgayChay } };
+            }),
+            toggleCauDetail: () => agentRun('toggleCauDetail', () => { toggleCauDetail(); return { ...agentState(), detailExpanded }; }),
+            closeCauDetail: () => agentRun('closeCauDetail', () => { closeDetailPanel(); return { ...agentState(), detailOpen: Boolean(document.getElementById('cauDetailPanel')?.classList.contains('active')), detailExpanded }; }),
+            soiViTri: (posA, posB) => agentRun('soiViTri', () => {
+                const a = Number(posA), b = Number(posB);
+                if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || a > 106 || b < 0 || b > 106 || a === b) throw new Error('Hai vị trí phải là số nguyên khác nhau từ 0 đến 106.');
+                agentRequireData(1); switchTab('tabSoiViTri');
+                document.getElementById('svtPos1').value = String(a); document.getElementById('svtPos2').value = String(b); svtProcess();
+                return { ...agentState(), positions: [a, b] };
+            }),
+            selectSoiDay: index => agentRun('selectSoiDay', () => {
+                agentRequireData(1); const i = Number(index); const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+                const startIndex = Math.max(0, endIndex - 9); const available = endIndex - startIndex + 1;
+                if (!Number.isInteger(i) || i < 0 || i >= available) throw new Error(`Ngày Soi vị trí không hợp lệ: ${index}`);
+                switchTab('tabSoiViTri'); svtSelectDay(i, startIndex, endIndex);
+                return { ...agentState(), soiDayIndex: svtCurrentDayIndex, selectedDate: RAW_DAYS[endIndex - i]?.day || null };
+            }),
+            setTableDays: (target, days) => agentRun('setTableDays', () => {
+                if (!['home','svt'].includes(target)) throw new Error(`Bảng không hợp lệ: ${target}`);
+                const n = Number(days); if (!Number.isInteger(n) || n < 1 || n > 30) throw new Error('Số ngày bảng phải từ 1 đến 30.');
+                const input = document.getElementById(target === 'home' ? 'homeTableNumDays' : 'svtTableNumDays');
+                if (!input) throw new Error(`Không tìm thấy ô số ngày của bảng ${target}.`);
+                input.value = String(n); svtUpdateTableDays(target);
+                return { ...agentState(), table: target, tableDays: n };
+            }),
+            setNewNumbersWindow: days => agentRun('setNewNumbersWindow', () => {
+                const n = Number(days); if (!Number.isInteger(n) || n < 1 || n > 60) throw new Error('Cửa sổ số mới phải từ 1 đến 60 ngày.');
+                const input = document.getElementById('svtNewNumbersWindow'); if (!input) throw new Error('Không tìm thấy cửa sổ số mới.');
+                input.value = String(n); svtRerenderNewNumbersAlert(); return { ...agentState(), newNumbersWindow: n, newNumbers: [...svtNewNumbersList] };
+            }),
+            setTrendDays: days => agentRun('setTrendDays', () => {
+                const n = Number(days); if (!Number.isInteger(n) || n < 2 || n > 30) throw new Error('Cửa sổ xu hướng phải từ 2 đến 30 ngày.');
+                const input = document.getElementById('svtNumDays'); if (!input) throw new Error('Không tìm thấy ô số ngày xu hướng.');
+                input.value = String(n); analyzeSoiViTri(); return { ...agentState(), trendDays: n };
+            }),
+            clearSoiHistory: () => agentRun('clearSoiHistory', () => { svtClearHistory(); return { ...agentState(), historyDays: svtHistory.length }; }),
+            copyNewNumbers: () => agentRun('copyNewNumbers', () => { copySvtNewNumbers(); return { ...agentState(), copiedNumbers: [...svtNewNumbersList] }; }),
+            generateDanSo: () => agentRun('generateDanSo', () => { agentRequireData(); generateDanSo(); return agentState(); }),
+            generateFreq4: () => agentRun('generateFreq4', () => { agentRequireData(); generateDanFreq4(); return agentState(); }),
+            copyDanSo: () => agentRun('copyDanSo', () => { copyDanSo(); return agentState(); }),
+            copyFreq4: () => agentRun('copyFreq4', () => { copyDanFreq4(); return agentState(); }),
+            runAudit: () => agentRun('runAudit', () => { agentRequireData(); runDanAudit(); return agentState(); }),
+            runAnalysis: () => agentRun('runAnalysis', () => {
+                agentRequireData(); switchTab('tabPhanTich'); runAnalysis();
+                return agentWaitUntil(() => { const s = document.getElementById('analysisStatus')?.innerText || ''; return s === 'Đã phân tích xong' || s === 'Chưa đủ dữ liệu' ? agentState() : false; }, 180000);
+            }),
+            sortAnalysis: (sortKey = 'number', kind = 'gdb') => agentRun('sortAnalysis', () => {
+                if (!['number','freq','gan'].includes(sortKey)) throw new Error(`Khóa sắp xếp không hợp lệ: ${sortKey}`);
+                if (!['gdb','loto'].includes(kind)) throw new Error(`Loại bảng phân tích không hợp lệ: ${kind}`);
+                sortAnalysisNumberTable(sortKey, kind); return { ...agentState(), sortKey, kind };
+            }),
+            refreshLoto: () => agentRun('refreshLoto', () => { agentRequireData(1); refreshLotoAnalysisOnly(); return agentState(); }),
+            exportCau: dayCount => agentRun('exportCau', () => { agentRequireData(2); if (dayCount !== 1 && dayCount !== 2) throw new Error('dayCount chỉ nhận 1 hoặc 2.'); exportCauNumbersByDays(dayCount); return agentState(); }),
+            exportDanSo: () => agentRun('exportDanSo', () => { agentRequireData(); exportDanSoTxt(); return agentState(); }),
+            exportFreq4: () => agentRun('exportFreq4', () => { agentRequireData(); exportDanFreq4Txt(); return agentState(); }),
+            getConfig: () => agentRun('getConfig', () => agentConfigSnapshot()),
+            updateConfig: patch => agentRun('updateConfig', () => agentSetConfig(patch)),
+            resetConfig: () => agentRun('resetConfig', () => { resetConfig(); return agentConfigSnapshot(); }),
+            reset: options => agentRun('reset', () => {
+                if (!options || options.confirm !== true) throw new Error('RESET cần gọi rõ { confirm: true }.');
+                const originalConfirm = window.confirm; window.confirm = () => true;
+                try { clearImportedData(); } finally { window.confirm = originalConfirm; }
+                return agentState();
+            })
+        };
+
+        window.onload = function() {
+            loadConfig();
+            setStatus('ready');
+            currentRows = [];
+            updateStats([]);
+            loadSample();
+            renderDashboard();
+        };
+    </script>
+
+
+<script>
+// === TU TAI DU LIEU MOI TU data.json (cung origin, khong can proxy) ===
+(function() {
+    function applyData(days) {
+        try {
+            APP_DATA.days = days;
+            APP_DATA.flatData = days.map(function(d) { return flattenDayData(d.data); });
+            APP_DATA.posMapCache = null;
+            RAW_DAYS = APP_DATA.days;
+            flatData = APP_DATA.flatData;
+            if (typeof refreshVisibleDays === 'function') refreshVisibleDays(days);
+            if (typeof updateDataSummary === 'function') updateDataSummary(days);
+            var st = document.getElementById('uploadStatus');
+            if (st) {
+                st.innerHTML = '<i class="fas fa-check-circle"></i> Dữ liệu mới: ' + days.length + ' ngày (đến ' + days[days.length-1].day + ')';
+                st.style.color = '#4ade80';
+            }
+        } catch (e) { console.warn('applyData loi:', e); }
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('data.json', {cache: 'no-store'})
+            .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(function(j) {
+                if (j && j.days && j.days.length >= 3) applyData(j.days);
+            })
+            .catch(function(e) { console.warn('Khong tai duoc data.json, dung du lieu nhung san:', e.message); });
+    });
+})();
+</script>
+</body>
+</html>
