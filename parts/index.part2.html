@@ -1,0 +1,1518 @@
+                    <div class="dates" id="dateLabels">
+                        <!-- Sẽ được tạo động -->
+                    </div>
+                </div>
+
+                <div class="xs-table-wrap">
+                    <table class="xs-table" id="xsTable"></table>
+                </div>
+
+                <div class="xs-legend">
+                    <span><span class="dot green"></span> VT A (xanh lá) <span style="color:#4ade80;font-size:8px;">▼</span></span>
+                    <span><span class="dot blue"></span> VT B (xanh dương) <span style="color:#5b8cff;font-size:8px;">▼</span></span>
+                    <span><span class="dot gold"></span> 2 số cuối ĐB</span>
+                    <span style="color:#3a5a7a;font-size:8px;">🖱 Click vào số để xem vị trí</span>
+                </div>
+            </div>
+        </div>
+
+<div id="tabSoiViTri" class="tab-content">
+            <div class="svt-grid" style="margin-top: 10px;">
+                
+                <!-- Cột trái: Điều khiển & Lịch sử -->
+                <div>
+                    <div class="svt-panel" style="margin-bottom: 20px;">
+                        <div class="svt-title"><i class="fas fa-crosshairs"></i> Vị trí soi</div>
+                        <div class="svt-form-row">
+                            <div style="text-align: center;">
+                                <label style="display:block; font-size:11px; color:#7a8aaa; margin-bottom:4px;">Vị trí 1</label>
+                                <input class="svt-input" id="svtPos1" type="number" placeholder="0" value="0" />
+                            </div>
+                            <div style="text-align: center;">
+                                <label style="display:block; font-size:11px; color:#7a8aaa; margin-bottom:4px;">Vị trí 2</label>
+                                <input class="svt-input" id="svtPos2" type="number" placeholder="1" value="1" />
+                            </div>
+                        </div>
+                        <button class="btn btn-success" onclick="svtProcess()" style="width: 100%; padding: 10px;"><i class="fas fa-wand-magic-sparkles"></i> SOI NGAY</button>
+                    </div>
+
+                    <div class="svt-panel" style="margin-bottom: 20px;">
+                        <div class="svt-title"><i class="fas fa-trophy"></i> Kết quả soi cầu</div>
+                        <div class="svt-result-box">
+                            <div class="svt-result-val" id="svtResultDisplay">--</div>
+                        </div>
+                        <div style="font-size:11px; color:#5a6a8a; text-align:center;">Tổng vị trí: <span id="svtTotalPos">107</span></div>
+                    </div>
+
+                    <div class="svt-panel">
+                        <div class="svt-title" style="justify-content: space-between;">
+                            <span><i class="fas fa-clock-rotate-left"></i> Lịch sử soi</span>
+                            <button class="btn" onclick="svtClearHistory()" style="padding: 2px 8px; font-size: 10px; background: rgba(255,71,87,0.1); color: #ff4757;"><i class="fas fa-trash-can"></i> Xóa</button>
+                        </div>
+                        <div class="svt-history" id="svtHistoryList">
+                            <div style="color:#5a6a8a; font-size:12px; text-align:center; padding:10px;">Chưa có lịch sử</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cột phải: Bảng kết quả xổ số chuyên biệt để soi vị trí -->
+                <div>
+                    <div class="svt-panel" style="margin-bottom: 20px;">
+                        <div class="svt-title" style="justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                            <span><i class="fas fa-table"></i> Bảng kết quả xổ số <span id="svtCurrentDateLabel" style="color:#4facfe; margin-left:8px;"></span></span>
+                            <label style="font-size:10px; color:#7a8aaa; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;">
+                                Hiển thị <input type="number" id="svtTableNumDays" value="1" min="1" max="30" step="1" aria-label="Số ngày hiển thị bảng kết quả" onchange="svtUpdateTableDays('svt')" style="width:42px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); color:#fff; border-radius:4px; padding:3px 4px; text-align:center;"> ngày
+                            </label>
+                        </div>
+                        <div class="xs-table-wrap" style="background:transparent; border:none; padding:0;">
+                            <table class="xs-table" id="svtTable"></table>
+                        </div>
+                        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:8px; color:#7a8aaa; font-size:10px;">
+                            <span><i style="display:inline-block; width:9px; height:9px; border-radius:2px; background:#a29bfe; margin-right:4px;"></i>Vị trí được soi</span>
+                            <span><i style="display:inline-block; width:9px; height:9px; border-radius:2px; background:rgba(251,191,36,.55); border-bottom:2px solid #fbbf24; margin-right:4px;"></i>Không đảo</span>
+                            <span><i style="display:inline-block; width:9px; height:9px; border-radius:2px; background:rgba(255,159,67,.55); border-bottom:2px solid #ff9f43; margin-right:4px;"></i>Đảo / tín hiệu khác</span>
+                        </div>
+                        <div id="svtTraceSummary" style="margin-top:8px; color:#7a8aaa; font-size:10px; line-height:1.6;">Chọn hai vị trí rồi bấm “SOI NGAY” để truy vết từng ngày.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<div id="tabDanSo" class="tab-content">
+            <div class="controls" style="justify-content: center; gap: 12px; flex-wrap: wrap;">
+                <label style="color:#e8edf5; font-size:13px; display:flex; align-items:center; gap:6px;">
+                    📅 Dùng <input type="number" id="danNumDays" min="2" max="30" value="10" style="width:50px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:4px 6px; text-align:center;"> ngày gần nhất
+                </label>
+                <label style="color:#e8edf5; font-size:13px; display:flex; align-items:center; gap:6px;">
+                    📊 Tần suất từ <input type="number" id="danFreqMin" min="1" max="20" value="1" style="width:40px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:4px 6px; text-align:center;">
+                </label>
+                <label style="color:#e8edf5; font-size:13px; display:flex; align-items:center; gap:6px;">
+                    đến <input type="number" id="danFreqMax" min="1" max="20" value="3" style="width:40px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:4px 6px; text-align:center;">
+                </label>
+                <button class="btn btn-success" onclick="generateDanSo()" style="padding: 6px 16px;"><i class="fas fa-bolt"></i> Tạo dàn</button>
+            </div>
+            
+            <div class="xs-section" style="margin-top: 10px;" id="danSummaryContainer">
+                <div class="xs-header">
+                    <span class="title"><i class="fas fa-chart-simple"></i> TỔNG HỢP SỐ XUẤT HIỆN</span>
+                </div>
+                <div style="padding: 15px;">
+                    <div id="summaryDates" style="font-size:13px; color:#7a8aaa; margin-bottom:12px; line-height:1.6;">
+                        Vui lòng bấm "Tạo dàn" để xem kết quả dựa trên dữ liệu đã nạp.
+                    </div>
+                    <div id="summaryStats" style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; margin-bottom:15px; color:#a0b0c0;"></div>
+                    <div id="summaryNumbers" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                </div>
+            </div>
+
+            <div class="xs-section" style="margin-top: 10px;" id="danResultContainer">
+                <div class="xs-header">
+                    <span class="title"><i class="fas fa-layer-group"></i> KẾT QUẢ DÀN SỐ</span>
+                    <div class="dates">
+                        <span class="d active total-count-badge" id="danCountLabel"><span class="total-count-label">Tổng:</span> <strong class="total-count-value">0</strong> <span class="total-count-unit">số</span></span>
+                    </div>
+                </div>
+                <div style="padding: 15px;">
+                    <div id="danStats" style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; margin-bottom:15px; color:#a0b0c0;">
+                        Vui lòng bấm "Tạo dàn" để xem kết quả dựa trên dữ liệu đã nạp.
+                    </div>
+                    <div id="danNumbers" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:15px;"></div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn" onclick="copyDanSo()" id="btnCopyDan" style="display:none;"><i class="fas fa-copy"></i> Sao chép</button>
+                        <button class="btn btn-export-dan" onclick="exportDanSoTxt()" id="btnExportDan" style="display:none;"><i class="fas fa-file-export"></i> Xuất TXT</button>
+                    </div>
+                    <div id="danRecencyBox" style="margin-top:16px;display:none;">
+                        <div style="font-size:11px;color:#9aabcd;font-weight:700;margin-bottom:6px;text-transform:uppercase;">Xếp hạng theo ngày xuất hiện gần nhất</div>
+                        <div style="overflow:auto;border:1px solid rgba(255,255,255,.06);border-radius:8px;">
+                            <table style="width:100%;min-width:420px;border-collapse:collapse;font-size:12px;">
+                                <thead><tr style="background:#17243a;color:#9aabcd;">
+                                    <th style="padding:7px;text-align:left;">Hạng</th>
+                                    <th style="padding:7px;text-align:left;">Số</th>
+                                    <th style="padding:7px;text-align:left;">Ngày gần nhất</th>
+                                    <th style="padding:7px;text-align:right;">Số lần / cửa sổ</th>
+                                </tr></thead>
+                                <tbody id="danRecencyTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                        </div>
+            <div class="xs-section" style="margin-top:10px; border-color:rgba(236,72,153,.24);" id="danFreq4Container">
+                <div class="xs-header">
+                    <span class="title" style="color:#f0abfc;"><i class="fas fa-filter"></i> LỌC DÀN SỐ TẦN SUẤT 4 <small style="font-size:10px;color:#7a8aaa;font-weight:500;margin-left:6px;">(tách riêng, không thay thế dàn nền)</small></span>
+                </div>
+                <div style="padding:15px;">
+                    <div class="controls" style="justify-content:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                        <label style="color:#e8edf5;font-size:12px;display:flex;align-items:center;gap:6px;">Dùng cùng cửa sổ <strong id="danFreq4WindowLabel">10</strong> ngày</label>
+                        <label style="color:#e8edf5;font-size:12px;display:flex;align-items:center;gap:6px;">Xuất hiện trong <select id="danFreq4RecentDays" style="width:70px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:4px;padding:4px 5px;"><option value="1">1 ngày</option><option value="2">2 ngày</option><option value="3">3 ngày</option></select> gần nhất</label>
+                        <label style="color:#e8edf5;font-size:12px;display:flex;align-items:center;gap:6px;">Tối đa <input type="number" id="danFreq4Max" min="0" max="20" value="5" style="width:45px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:4px;padding:4px 6px;text-align:center;"> số</label>
+                        <button class="btn" onclick="generateDanFreq4()" style="padding:6px 14px;background:linear-gradient(135deg,#ec4899,#8b5cf6);"><i class="fas fa-filter"></i> Lọc Tần suất 4</button>
+                    </div>
+                    <div id="danFreq4Summary" style="font-size:11px;color:#9aa8c7;margin-bottom:10px;">Bấm “Lọc Tần suất 4” để tạo nhóm riêng từ dữ liệu đã nạp.</div>
+                    <div id="danFreq4Numbers" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+                    <div style="display:flex;gap:10px;">
+                        <button class="btn btn-secondary" onclick="copyDanFreq4()" id="btnCopyDanFreq4" style="display:none;padding:6px 12px;"><i class="fas fa-copy"></i> Sao chép nhóm 4</button>
+                        <button class="btn btn-export-dan" onclick="exportDanFreq4Txt()" id="btnExportDanFreq4" style="display:none;padding:6px 12px;"><i class="fas fa-file-export"></i> Xuất TXT nhóm 4</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+<div id="tabDanAudit" class="tab-content">
+            <div class="xs-section" style="margin-top:10px;">
+                <div class="xs-header"><span class="title"><i class="fas fa-clipboard-check"></i> KIỂM TRA HIỆU QUẢ DÀN</span></div>
+                <div style="padding:15px;">
+                    <div class="dan-audit-note">
+                        Tab này chỉ <strong>kiểm chứng độ bao phủ</strong> của dàn tần suất 1–2–3. Với mỗi cửa sổ N kỳ, hệ thống tạo dàn từ N kỳ trước rồi đối chiếu với GĐB của kỳ kế tiếp. Không dùng GĐB của kỳ đang kiểm tra để tạo dàn, không cắt dàn và không phải công cụ dự đoán.
+                    </div>
+                    <div class="controls dan-audit-controls">
+                        <label>Cửa sổ kiểm tra (kỳ):</label>
+                        <input id="danAuditWindows" type="number" min="2" max="120" value="10" inputmode="numeric" placeholder="Ví dụ: 10">
+                        <button class="btn" onclick="runDanAudit()" style="padding:6px 16px;"><i class="fas fa-play"></i> Chạy kiểm tra</button>
+                        <span class="hint" id="danAuditStatus">Chưa chạy kiểm tra</span>
+                    </div>
+                    <div id="danAuditSummary" style="margin-top:12px;">Vui lòng nạp dữ liệu hợp lệ rồi bấm “Chạy kiểm tra”.</div>
+                    <div id="danAuditDetails" class="dan-audit-detail"></div>
+                </div>
+            </div>
+        </div>
+
+<div id="tabPhanTich" class="tab-content">
+            <div class="controls">
+                <button class="btn" onclick="runAnalysis()"><i class="fas fa-play"></i> Phân tích lịch sử</button>
+                <span class="hint" id="analysisStatus">Chưa chạy phân tích</span>
+            </div>
+            
+            <div class="xs-section" style="margin-top: 10px;">
+                <div class="xs-header">
+                    <span class="title"><i class="fas fa-chart-bar"></i> BÁO CÁO PHÂN TÍCH NHIỀU NGÀY</span>
+                </div>
+                <div id="analysisReport" style="padding: 15px; color: #b0c0dd; font-size: 12px; line-height: 1.6;">
+                    <div style="text-align: center; color: #5a7a9a; padding: 20px;">
+                        Bấm "Phân tích lịch sử" để quét toàn bộ dữ liệu TXT và tìm mẫu lặp lại.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<div id="tabCauHinh" class="tab-content">
+            <div class="xs-section" style="margin-top: 10px;">
+                <div class="xs-header">
+                    <span class="title"><i class="fas fa-sliders-h"></i> CẤU HÌNH HIỂN THỊ</span>
+                </div>
+                <div style="padding: 20px; max-width: 900px; margin: 0 auto;">
+                    <div class="config-grid">
+                        <div class="config-section">
+                            <div class="config-section-title">Màu sắc & Hiệu ứng</div>
+                            <div class="config-group">
+                                <div class="config-label">Hiệu ứng nhấp nháy (Blink)</div>
+                                <label class="switch">
+                                    <input type="checkbox" id="cfgBlink" onchange="saveConfig()" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Hiệu ứng Soi Vị trí (Phóng to)</div>
+                                <label class="switch">
+                                    <input type="checkbox" id="cfgPulse" onchange="saveConfig()" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Hiệu ứng rê chuột (Hover)</div>
+                                <label class="switch">
+                                    <input type="checkbox" id="cfgHover" onchange="saveConfig()" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu sắc Vị trí A</div>
+                                <input type="color" id="cfgColorA" value="#4ade80" onchange="saveConfig()">
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu sắc Vị trí B</div>
+                                <input type="color" id="cfgColorB" value="#38d9ff" onchange="saveConfig()">
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu sắc Giải Đặc Biệt</div>
+                                <input type="color" id="cfgColorSpecial" value="#ff4757" onchange="saveConfig()">
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu sắc Số Trùng (Duplicate)</div>
+                                <input type="color" id="cfgColorDup" value="#4ade80" onchange="saveConfig()">
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <div class="config-section-title">Tùy chọn Bố cục</div>
+                            <div class="config-group">
+                                <div class="config-label">Kích thước chữ</div>
+                                <select id="cfgFontSize" class="config-select" onchange="saveConfig()" aria-label="Kích thước chữ">
+                                    <option value="normal">Vừa (mặc định)</option>
+                                    <option value="small">Nhỏ</option>
+                                    <option value="large">Lớn</option>
+                                </select>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Chi tiết cầu khi chọn</div>
+                                <select id="cfgDetailDefault" class="config-select" onchange="saveConfig()" aria-label="Mặc định chi tiết cầu">
+                                    <option value="closed">Thu gọn (mặc định)</option>
+                                    <option value="open">Mở chi tiết</option>
+                                </select>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Báo cáo Phân tích</div>
+                                <select id="cfgAnalysisDefault" class="config-select" onchange="saveConfig()" aria-label="Mặc định báo cáo Phân tích">
+                                    <option value="closed">Thu gọn (mặc định)</option>
+                                    <option value="open">Mở chi tiết</option>
+                                </select>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu nền bảng kết quả</div>
+                                <input type="color" id="cfgTableBg" value="#0a0e1a" onchange="saveConfig()" aria-label="Màu nền bảng kết quả">
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <div class="config-section-title">Màu sắc Dàn số</div>
+                            <div class="config-group"><div class="config-label">Tần suất 1</div><input type="color" id="cfgDanFreq1" value="#60a5fa" onchange="saveConfig()" aria-label="Màu dàn tần suất 1"></div>
+                            <div class="config-group"><div class="config-label">Tần suất 2</div><input type="color" id="cfgDanFreq2" value="#2dd4bf" onchange="saveConfig()" aria-label="Màu dàn tần suất 2"></div>
+                            <div class="config-group"><div class="config-label">Tần suất 3</div><input type="color" id="cfgDanFreq3" value="#facc15" onchange="saveConfig()" aria-label="Màu dàn tần suất 3"></div>
+                            <div class="config-group"><div class="config-label">Tần suất 4</div><input type="color" id="cfgDanFreq4" value="#c4b5fd" onchange="saveConfig()" aria-label="Màu dàn tần suất 4"></div>
+                            <div class="config-group"><div class="config-label">Tần suất cao</div><input type="color" id="cfgDanFreqHigh" value="#fb7185" onchange="saveConfig()" aria-label="Màu dàn tần suất cao"></div>
+                        </div>
+
+                        <div class="config-section">
+                            <div class="config-section-title">Tùy chỉnh giao diện</div>
+                            <div class="config-group">
+                                <div class="config-label">Màu chữ chính</div>
+                                <input type="color" id="cfgTextColor" value="#e8edf5" onchange="saveConfig()" aria-label="Màu chữ chính">
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu nền tổng thể</div>
+                                <input type="color" id="cfgBodyBg" value="#0a0e1a" onchange="saveConfig()" aria-label="Màu nền tổng thể">
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Màu nền thẻ báo cáo</div>
+                                <input type="color" id="cfgCardBg" value="#11182a" onchange="saveConfig()" aria-label="Màu nền thẻ báo cáo">
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Kiểu bo góc</div>
+                                <select id="cfgRadius" class="config-select" onchange="saveConfig()" aria-label="Kiểu bo góc">
+                                    <option value="normal">Cân bằng (mặc định)</option>
+                                    <option value="sharp">Gọn, ít bo</option>
+                                    <option value="round">Bo tròn mềm</option>
+                                </select>
+                            </div>
+                            <div class="config-group">
+                                <div class="config-label">Hiệu ứng kính mờ</div>
+                                <label class="switch">
+                                    <input type="checkbox" id="cfgBlur" onchange="saveConfig()" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: center;">
+                        <button class="btn btn-secondary" onclick="resetConfig()"><i class="fas fa-undo"></i> Khôi phục mặc định</button>
+                    </div>
+                    
+                    <div class="config-help">
+                        <i class="fas fa-info-circle"></i> Các tùy chọn trên chỉ thay đổi cách hiển thị. Dữ liệu, quy tắc Scan, nhóm cầu, dự báo và danh sách loại trừ không bị ảnh hưởng.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ================================================================
+        // TRANG CHỦ
+        // ================================================================
+        function renderDashboard() {
+            const container = document.getElementById('dashboardContent');
+            if (!RAW_DAYS || RAW_DAYS.length === 0) {
+                document.getElementById('homeDataObserver').style.display = 'none';
+                container.innerHTML = `
+                    <div style="text-align: center; color: #5a7a9a; font-size: 13px; padding: 40px 0;">
+                        <i class="fas fa-database" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
+                        <p>Chưa có dữ liệu. Vui lòng sử dụng thanh nạp phía trên để bắt đầu.</p>
+                    </div>`;
+                return;
+            }
+
+            const totalDays = RAW_DAYS.length;
+            const firstDate = dateLabel(RAW_DAYS[0].day);
+            const lastDate = dateLabel(RAW_DAYS[totalDays - 1].day);
+            const targetDate = TARGET_INDEX >= 0 ? dateLabel(RAW_DAYS[TARGET_INDEX].day) : lastDate;
+            const totalCau = currentRows.length;
+            
+            let countE = 0, countI = 0, countM = 0;
+            currentRows.forEach(r => {
+                if (r.type === 'Toàn Thuận') countE++;
+                else if (r.type === 'Toàn Đảo') countI++;
+                else countM++;
+            });
+
+            document.getElementById('homeDataObserver').style.display = 'block';
+            if (typeof svtRenderDayTabs === 'function') {
+                svtRenderDayTabs();
+            }
+            
+            const isFull = RAW_DAYS.every(d => d.data.length === 8);
+            const fullText = isFull ? '<span class="hl">đủ 8 giải</span>' : '<span class="hl-warn">thiếu giải</span>';
+            const nextDay = TARGET_INDEX + 1 < RAW_DAYS.length ? dateLabel(RAW_DAYS[TARGET_INDEX + 1].day) : 'ngày kế tiếp';
+            
+            const sessionBar = document.getElementById('sessionStatusBar');
+            if (sessionBar) {
+                sessionBar.style.display = 'block';
+                sessionBar.innerHTML = `
+                    <div class="session-status-bar">
+                        <i class="fas fa-check-circle" style="color:#4ade80;"></i>
+                        <span>Đã nạp <span class="hl">${totalDays}</span> ngày</span> &middot;
+                        <span>Trạng thái: ${fullText}</span> &middot;
+                        <span>Đang chọn mốc: <span class="hl">${targetDate}</span></span> &middot;
+                        <span>Dự đoán cho: <span class="hl">${nextDay}</span></span>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = `
+                <div class="dash-grid">
+                    <div class="dash-card" style="border-top: 3px solid #4facfe;">
+                        <i class="fas fa-database dash-icon"></i>
+                        <div class="dash-title">Dữ liệu hệ thống</div>
+                        <div class="dash-value">${totalDays} <span style="font-size:14px;color:#8a9bb0;font-family:sans-serif;">ngày</span></div>
+                        <div class="dash-sub">Từ ${firstDate} đến ${lastDate}</div>
+                    </div>
+                    <div class="dash-card" style="border-top: 3px solid #f1c40f;">
+                        <i class="fas fa-calendar-check dash-icon"></i>
+                        <div class="dash-title">Mốc soi cầu hiện tại</div>
+                        <div class="dash-value">${targetDate}</div>
+                        <div class="dash-sub">Đang dùng dữ liệu đến ngày này</div>
+                    </div>
+                    <div class="dash-card" style="border-top: 3px solid #4ade80;">
+                        <i class="fas fa-project-diagram dash-icon"></i>
+                        <div class="dash-title">Tổng số cầu tìm thấy</div>
+                        <div class="dash-value">${totalCau} <span style="font-size:14px;color:#8a9bb0;font-family:sans-serif;">cầu</span></div>
+                        <div class="dash-sub">
+                            <span style="color:#4ade80;">${countE} Thuận</span> &middot; 
+                            <span style="color:#38d9ff;">${countI} Đảo</span> &middot; 
+                            <span style="color:#f1c40f;">${countM} Hỗn hợp</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dash-alert">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 16px;"></i>
+                    <div>
+                        <strong>Lưu ý về tính minh bạch:</strong> Hệ thống hoạt động theo nguyên tắc Walk-forward backtest. Mọi cầu quét được chỉ sử dụng dữ liệu từ ngày mốc trở về trước, tuyệt đối không dùng kết quả tương lai để tạo thành tích giả. Lô tô chỉ mang tính chất tham khảo, mục tiêu chính là 2 số cuối Giải Đặc Biệt.
+                    </div>
+                </div>
+
+                <div style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
+                    <div class="dash-title" style="margin-bottom:12px;"><i class="fas fa-arrow-right"></i> Việc tiếp theo</div>
+                    <div class="dash-shortcuts" style="margin-top:0;">
+                        <button class="btn" onclick="switchTab('tabTimCau')"><i class="fas fa-search"></i> Chọn mốc soi & Tìm cầu</button>
+                        <button class="btn" style="background: linear-gradient(135deg, #10b981, #059669);" onclick="switchTab('tabPhanTich')"><i class="fas fa-chart-line"></i> Phân tích lịch sử</button>
+                        <button class="btn btn-secondary" onclick="switchTab('tabSoiViTri')"><i class="fas fa-crosshairs"></i> Soi vị trí thủ công</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ================================================================
+        // DỮ LIỆU
+        // ================================================================
+        let DAYS_DATA = [
+            [
+                { label: 'Đặc biệt', numbers: ['29183'], special: true },
+                { label: 'Giải nhất', numbers: ['55349'] },
+                { label: 'Giải nhì', numbers: ['37265', '21266'] },
+                { label: 'Giải ba', numbers: ['40833', '36729', '67077', '56251', '97269', '23553'] },
+                { label: 'Giải tư', numbers: ['6985', '4935', '9042', '1686'] },
+                { label: 'Giải năm', numbers: ['7962', '4616', '0776', '8699', '4334', '2074'] },
+                { label: 'Giải sáu', numbers: ['873', '082', '954'] },
+                { label: 'Giải bảy', numbers: ['51', '04', '92', '13'] }
+            ],
+            [
+                { label: 'Đặc biệt', numbers: ['13643'], special: true },
+                { label: 'Giải nhất', numbers: ['09217'] },
+                { label: 'Giải nhì', numbers: ['23962', '46930'] },
+                { label: 'Giải ba', numbers: ['07981', '14318', '66351', '73807', '06781', '90948'] },
+                { label: 'Giải tư', numbers: ['5077', '4420', '4911', '6688'] },
+                { label: 'Giải năm', numbers: ['9070', '9942', '5633', '9635', '9813', '1369'] },
+                { label: 'Giải sáu', numbers: ['189', '011', '072'] },
+                { label: 'Giải bảy', numbers: ['19', '11', '73', '54'] }
+            ],
+            [
+                { label: 'Đặc biệt', numbers: ['07523'], special: true },
+                { label: 'Giải nhất', numbers: ['03402'] },
+                { label: 'Giải nhì', numbers: ['71264', '70743'] },
+                { label: 'Giải ba', numbers: ['23922', '98532', '50759', '33811', '64437', '25606'] },
+                { label: 'Giải tư', numbers: ['4096', '2934', '0699', '0661'] },
+                { label: 'Giải năm', numbers: ['5404', '1432', '4959', '9897', '3794', '2391'] },
+                { label: 'Giải sáu', numbers: ['468', '074', '622'] },
+                { label: 'Giải bảy', numbers: ['88', '34', '47', '00'] }
+            ]
+        ];
+
+        let DAY_SHORT = ['18/08', '19/08', '20/08'];
+        let DAY_THU = ['Thứ Ba', 'Thứ Tư', 'Thứ Năm'];
+
+        function flattenDayData(dayData) {
+            const result = [];
+            for (const row of dayData) {
+                for (const num of row.numbers) {
+                    const str = String(num);
+                    for (const ch of str) {
+                        result.push(parseInt(ch, 10));
+                    }
+                }
+            }
+            return result;
+        }
+
+        // Single Source of Truth
+        let APP_DATA = {
+            days: DAYS_DATA.map((data, index) => ({ day: ['18-08-2026', '19-08-2026', '20-08-2026'][index], data })),
+            flatData: DAYS_DATA.map(day => flattenDayData(day)),
+            posMapCache: null
+        };
+        
+        // Để tương thích ngược với các hàm chưa sửa hết, tạm gán tham chiếu
+        let RAW_DAYS = APP_DATA.days;
+        let flatData = APP_DATA.flatData;
+
+        // ================================================================
+        // QUẢN LÝ TAB ĐIỀU HƯỚNG
+        // ================================================================
+        function svtClearHighlights() {
+            // Chỉ dọn trạng thái trình bày của bảng Soi vị trí;
+            // không đụng vào RAW_DAYS, HISTORY_DATA hay kết quả thuật toán.
+            document.querySelectorAll('#svtTable .svt-digit').forEach(el => {
+                el.classList.remove('highlight', 'pred-highlight', 'pred-straight', 'pred-inverted', 'pred-both');
+            });
+        }
+
+        function switchTab(tabId) {
+            if (tabId !== 'tabSoiViTri') svtClearHighlights();
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('#navLinks span').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            
+            if (tabId === 'tabDashboard') {
+                renderDashboard();
+            }
+
+            // Tìm thẻ span tương ứng để set active
+            // Ánh xạ phải khớp đúng thứ tự hiển thị trên thanh điều hướng.
+            // Trước đây tab Soi vị trí và Phân tích bị giữ theo thứ tự cũ,
+            // khiến trạng thái active sáng nhầm sang Phân tích.
+            const tabs = {
+                'tabDashboard': 0,
+                'tabTimCau': 1,
+                'tabSoiViTri': 2,
+                'tabDanSo': 3,
+                'tabDanAudit': 4,
+                'tabPhanTich': 5,
+                'tabCauHinh': 6
+            };
+            const index = tabs[tabId];
+            if (index !== undefined) {
+                document.querySelectorAll('#navLinks span')[index].classList.add('active');
+            }
+            if (tabId === 'tabSoiViTri') {
+                svtInit();
+            } else if (tabId === 'tabDashboard') {
+                if (typeof svtRenderDayTabs === 'function' && RAW_DAYS && RAW_DAYS.length) {
+                    svtRenderDayTabs();
+                }
+            }
+        }
+
+        // ================================================================
+        // NHẬP FILE TXT THEO ĐỊNH DẠNG V6
+        // ================================================================
+        const TXT_FORMAT = [
+            { label: 'Đặc biệt', size: 5, count: 1, special: true },
+            { label: 'Giải nhất', size: 5, count: 1 },
+            { label: 'Giải nhì', size: 5, count: 2 },
+            { label: 'Giải ba', size: 5, count: 6 },
+            { label: 'Giải tư', size: 4, count: 4 },
+            { label: 'Giải năm', size: 4, count: 6 },
+            { label: 'Giải sáu', size: 3, count: 3 },
+            { label: 'Giải bảy', size: 2, count: 4 }
+        ];
+        const TXT_ALIASES = new Map([
+            ['đặc biệt', 'Đặc biệt'], ['đb', 'Đặc biệt'], ['gđb', 'Đặc biệt'],
+            ['giải nhất', 'Giải nhất'], ['g1', 'Giải nhất'],
+            ['giải nhì', 'Giải nhì'], ['g2', 'Giải nhì'],
+            ['giải ba', 'Giải ba'], ['g3', 'Giải ba'],
+            ['giải tư', 'Giải tư'], ['g4', 'Giải tư'],
+            ['giải năm', 'Giải năm'], ['g5', 'Giải năm'],
+            ['giải sáu', 'Giải sáu'], ['g6', 'Giải sáu'],
+            ['giải bảy', 'Giải bảy'], ['g7', 'Giải bảy']
+        ]);
+
+        function txtDateFrom(line) {
+            let m = line.match(/(\d{1,2})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{4})/);
+            if (m) return `${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}-${m[3]}`;
+            m = line.match(/ngày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+năm\s+(\d{4})/i);
+            return m ? `${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}-${m[3]}` : null;
+        }
+
+        function txtLabelFrom(line) {
+            const t = line.replace(/[:：]+$/, '').trim().toLowerCase();
+            if (TXT_ALIASES.has(t)) return { label: TXT_ALIASES.get(t), rest: '' };
+            const keys = [...TXT_ALIASES.keys()].sort((a, b) => b.length - a.length);
+            for (const key of keys) {
+                if (t.startsWith(key + ' ')) return { label: TXT_ALIASES.get(key), rest: line.slice(key.length).trim() };
+                if (t.startsWith(key + ':') || t.startsWith(key + '：')) {
+                    return { label: TXT_ALIASES.get(key), rest: line.slice(key.length).replace(/^\s*[:：]?\s*/, '') };
+                }
+            }
+            return null;
+        }
+
+        function isValidDateText(value) {
+            const parts = String(value).split('-').map(Number);
+            if (parts.length !== 3 || parts.some(Number.isNaN)) return false;
+            const [day, month, year] = parts;
+            const date = new Date(year, month - 1, day);
+            return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+        }
+
+        // ================================================================
+        function parseTxtContent(text) {
+            const lines = String(text || '').replace(/\uFEFF/g, '').replace(/\r\n?/g, '\n').split('\n').map(x => x.trim()).filter(Boolean);
+            const days = [];
+            let i = 0;
+            const numericOnly = value => /^\d[\d\s]*$/.test(value);
+
+            while (i < lines.length) {
+                const date = txtDateFrom(lines[i]);
+                if (!date) { i++; continue; }
+                if (!isValidDateText(date)) throw new Error(`Ngày không hợp lệ: ${date}`);
+                i++;
+                const data = [];
+
+                for (const cfg of TXT_FORMAT) {
+                    while (i < lines.length && /^[1-7]$/.test(lines[i])) i++;
+                    if (i >= lines.length) throw new Error(`${date}: thiếu ${cfg.label}`);
+                    const labelInfo = txtLabelFrom(lines[i]);
+                    if (!labelInfo || labelInfo.label !== cfg.label) throw new Error(`${date}: mong đợi "${cfg.label}" nhưng gặp "${lines[i]}"`);
+                    i++;
+
+                    let raw = labelInfo.rest || '';
+                    const expected = cfg.size * cfg.count;
+                    if (raw && !numericOnly(raw)) throw new Error(`${date} - ${cfg.label}: dữ liệu cùng dòng không hợp lệ: ${raw}`);
+                    while (raw.replace(/\s+/g, '').length < expected) {
+                        if (i >= lines.length) throw new Error(`${date} - ${cfg.label}: thiếu dữ liệu số`);
+                        if (txtDateFrom(lines[i])) throw new Error(`${date} - ${cfg.label}: thiếu dữ liệu, đã gặp ngày mới`);
+                        if (txtLabelFrom(lines[i])) throw new Error(`${date} - ${cfg.label}: thiếu dữ liệu, đã gặp giải khác`);
+                        if (!numericOnly(lines[i])) throw new Error(`${date} - ${cfg.label}: dòng dữ liệu không hợp lệ: ${lines[i]}`);
+                        raw += lines[i++];
+                        if (raw.replace(/\s+/g, '').length > expected) throw new Error(`${date} - ${cfg.label}: vượt quá ${expected} chữ số`);
+                    }
+                    const clean = raw.replace(/\s+/g, '');
+                    const numbers = [];
+                    for (let j = 0; j < clean.length; j += cfg.size) numbers.push(clean.slice(j, j + cfg.size));
+                    
+                    // VALIDATE TỪNG GIẢI
+                    if (numbers.length !== cfg.count) throw new Error(`${date} - ${cfg.label}: mong đợi ${cfg.count} số, nhận được ${numbers.length}`);
+                    for (const num of numbers) {
+                        if (num.length !== cfg.size) throw new Error(`${date} - ${cfg.label}: mong đợi mỗi số có ${cfg.size} chữ số, nhận được số ${num}`);
+                    }
+                    
+                    data.push({ label: cfg.label, numbers, special: !!cfg.special });
+                }
+
+                // DATA INTEGRITY LOCK: Kiểm tra cấu trúc tổng
+                if (data.length !== 8) throw new Error(`${date}: Thiếu giải (chỉ có ${data.length}/8 giải)`);
+                const total = data.reduce((sum, row) => sum + row.numbers.reduce((a, n) => a + n.length, 0), 0);
+                if (total !== 107) throw new Error(`${date}: tổng chữ số = ${total}, phải đúng 107`);
+                
+                days.push({ day: date, data });
+            }
+            if (!days.length) throw new Error('Không tìm thấy dữ liệu ngày hợp lệ trong TXT.');
+
+            // Chuẩn hóa thứ tự: luôn sắp xếp từ ngày cũ đến ngày mới
+            const dateKey = value => {
+                const [day, month, year] = String(value).split('-').map(Number);
+                return new Date(year, month - 1, day).getTime();
+            };
+            days.sort((a, b) => dateKey(a.day) - dateKey(b.day));
+            for (let k = 1; k < days.length; k++) {
+                if (days[k].day === days[k - 1].day) {
+                    throw new Error(`Ngày bị trùng trong TXT: ${days[k].day}. Hãy giữ lại đúng một bản ghi cho mỗi ngày.`);
+                }
+            }
+            return days;
+        }
+
+        function getLast2DB(dayData) {
+            const row = (dayData || []).find(item => item.label === 'Đặc biệt');
+            const value = row?.numbers?.[0];
+            return value ? String(value).slice(-2).padStart(2, '0') : '--';
+        }
+
+        function dateLabel(date) {
+            const parts = String(date).split('-');
+            return parts.length === 3 ? `${parts[0]}/${parts[1]}` : String(date);
+        }
+
+        function weekdayLabel(date) {
+            const parts = String(date).split('-').map(Number);
+            if (parts.length !== 3 || parts.some(Number.isNaN)) return 'Kết quả';
+            return ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][new Date(parts[2], parts[1] - 1, parts[0]).getDay()];
+        }
+
+        function dateKeyFromText(value) {
+            const [day, month, year] = String(value).split('-').map(Number);
+            return new Date(year, month - 1, day).getTime();
+        }
+
+        function getDataQuality(parsed) {
+            const duplicateDates = [];
+            const seenDates = new Set();
+            const gaps = [];
+            for (let i = 0; i < parsed.length; i++) {
+                const date = parsed[i].day;
+                if (seenDates.has(date)) duplicateDates.push(date);
+                seenDates.add(date);
+                if (i > 0) {
+                    const diff = Math.round((dateKeyFromText(date) - dateKeyFromText(parsed[i - 1].day)) / 86400000);
+                    if (diff > 1) gaps.push(`${parsed[i - 1].day} → ${date} (thiếu ${diff - 1} ngày)`);
+                }
+            }
+            return { from: parsed[0]?.day || '--', to: parsed[parsed.length - 1]?.day || '--', duplicateDates, gaps };
+        }
+
+        function updateDataSummary(parsed) {
+            const box = document.getElementById('dataSummary');
+            if (!box) return;
+            if (!parsed || !parsed.length) {
+                box.innerHTML = '<strong>Trạng thái:</strong> Chưa có dữ liệu TXT được nạp.';
+                return;
+            }
+            const quality = getDataQuality(parsed);
+            const warnings = [];
+            if (quality.duplicateDates.length) warnings.push(`ngày trùng: ${quality.duplicateDates.join(', ')}`);
+            if (quality.gaps.length) warnings.push(`khoảng thiếu: ${quality.gaps.join('; ')}`);
+            const warningHtml = warnings.length ? `<br><span class="data-warning"><strong>Cảnh báo:</strong> ${warnings.join(' | ')}</span>` : '<br><span style="color:#4ade80;"><strong>Kiểm tra ngày:</strong> không trùng, không phát hiện khoảng thiếu.</span>';
+            box.innerHTML = `<strong>Đã nạp:</strong> ${parsed.length} ngày | <strong>Khoảng:</strong> ${dateLabel(quality.from)} → ${dateLabel(quality.to)} | <strong>Mỗi ngày:</strong> 107 chữ số / 8 giải${warningHtml}`;
+        }
+
+        function updateDateDropdown() {
+            const select = document.getElementById('targetDate');
+            // Dựng toàn bộ HTML thành 1 chuỗi rồi gán 1 lần duy nhất (innerHTML) thay vì
+            // createElement+appendChild lặp lại cho từng ngày — với dữ liệu nhiều năm
+            // (hàng nghìn ngày), cách cũ gây rất nhiều lần tính lại bố cục (reflow) và
+            // có thể làm trình duyệt lag/đơ khi nạp file. Cách này chỉ 1 lần thao tác DOM.
+            const parts = ['<option value="-1">📅 Chọn ngày làm mốc soi cầu</option>'];
+            for (let index = 0; index < RAW_DAYS.length; index++) {
+                const item = RAW_DAYS[index];
+                const nextLabel = index + 1 < RAW_DAYS.length ? ` → dự đoán ${dateLabel(RAW_DAYS[index + 1].day)}` : ' → dự đoán ngày kế tiếp';
+                const label = `Soi ${weekdayLabel(item.day)} ${dateLabel(item.day)} (ĐB: ${getLast2DB(item.data)})${nextLabel}`;
+                parts.push(`<option value="${index}">${label}</option>`);
+            }
+            select.innerHTML = parts.join('');
+            select.disabled = RAW_DAYS.length < 3;
+        }
+
+        function clearSelectedDays(message = '⚠️ Cần chọn ngày có đủ 2 ngày trước đó để soi cầu') {
+            DAYS_DATA = [];
+            DAY_SHORT = [];
+            DAY_THU = [];
+            flatData = [];
+            HISTORY_DATA = [];
+            TARGET_INDEX = -1;
+            DISPLAY_DAYS_DATA = [];
+            DISPLAY_DAY_LABELS = [];
+            DISPLAY_TARGET_DAY_IDX = -1;
+            document.getElementById('infoN1').textContent = '--';
+            document.getElementById('infoN2').textContent = '--';
+            document.getElementById('infoN3').textContent = '--';
+            document.getElementById('predBadge').textContent = '🎯 Dự đoán';
+            document.getElementById('cauList').innerHTML = `<span class="empty">${message}</span>`;
+            currentRows = [];
+            currentFilter = 'all';
+            currentDayFilter = 'all';
+
+            // Trả các nút lọc và badge trạng thái về đúng mặc định ban đầu,
+            // tránh giữ lại lựa chọn lọc / số liệu của phiên dữ liệu cũ.
+            const cauDayFiltersBox = document.getElementById('cauDayFilters');
+            if (cauDayFiltersBox) cauDayFiltersBox.innerHTML = '';
+            const cauStatusBadgeEl = document.getElementById('cauStatusBadge');
+            if (cauStatusBadgeEl) {
+                cauStatusBadgeEl.textContent = 'Đang chờ...';
+                cauStatusBadgeEl.style.color = '';
+                cauStatusBadgeEl.style.borderColor = '';
+                cauStatusBadgeEl.style.background = '';
+            }
+            ['filterAll', 'filterStraight', 'filterInverted', 'filterMixed'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.className = 'filter-btn';
+            });
+            const filterAllBtn = document.getElementById('filterAll');
+            if (filterAllBtn) filterAllBtn.classList.add('active-all');
+
+            detailExpanded = false;
+            analysisNumberStats = { gdb: [], loto: [] };
+            analysisLotoNumDays = 10;
+            danFreqData = null;
+            danFreq4Data = null;
+            const emptyFreq4Summary = document.getElementById('danFreq4Summary');
+            const emptyFreq4Numbers = document.getElementById('danFreq4Numbers');
+            const emptyFreq4Copy = document.getElementById('btnCopyDanFreq4');
+            const emptyFreq4Export = document.getElementById('btnExportDanFreq4');
+            const emptyFreq4Window = document.getElementById('danFreq4WindowLabel');
+            if (emptyFreq4Summary) emptyFreq4Summary.textContent = 'Bấm “Lọc Tần suất 4” để tạo nhóm riêng từ dữ liệu đã nạp.';
+            if (emptyFreq4Numbers) emptyFreq4Numbers.innerHTML = '';
+            if (emptyFreq4Copy) emptyFreq4Copy.style.display = 'none';
+            if (emptyFreq4Export) emptyFreq4Export.style.display = 'none';
+            if (emptyFreq4Window) emptyFreq4Window.textContent = '10';
+
+            updateStats([]);
+            renderXS(-1, -1);
+
+            // Xóa toàn bộ báo cáo phụ để không giữ kết quả của mốc/file cũ.
+            const emptyAnalysis = document.getElementById('analysisReport');
+            const emptySummaryDates = document.getElementById('summaryDates');
+            const emptySummaryStats = document.getElementById('summaryStats');
+            const emptySummaryNumbers = document.getElementById('summaryNumbers');
+            const emptyDanStats = document.getElementById('danStats');
+            const emptyDanNumbers = document.getElementById('danNumbers');
+            const emptyDanCount = document.getElementById('danCountLabel');
+            const emptyDanAuditSummary = document.getElementById('danAuditSummary');
+            const emptyDanAuditDetails = document.getElementById('danAuditDetails');
+            const emptyAnalysisStatus = document.getElementById('analysisStatus');
+            const emptyDanAuditStatus = document.getElementById('danAuditStatus');
+            const emptyCopyDan = document.getElementById('btnCopyDan');
+            const emptyExportDan = document.getElementById('btnExportDan');
+            const emptyLotoInput = document.getElementById('analysisLotoNumDays');
+            if (emptyAnalysis) emptyAnalysis.innerHTML = '<div style="text-align:center;color:#5a7a9a;padding:20px;">Bấm "Phân tích lịch sử" để quét dữ liệu TXT.</div>';
+            if (emptySummaryDates) emptySummaryDates.textContent = 'Vui lòng bấm "Tạo dàn" để xem kết quả dựa trên dữ liệu đã nạp.';
+            if (emptySummaryStats) emptySummaryStats.innerHTML = '';
+            if (emptySummaryNumbers) emptySummaryNumbers.innerHTML = '';
+            if (emptyDanStats) emptyDanStats.textContent = 'Vui lòng bấm "Tạo dàn" để xem kết quả dựa trên dữ liệu đã nạp.';
+            if (emptyDanNumbers) emptyDanNumbers.innerHTML = '';
+            if (emptyDanCount) emptyDanCount.innerHTML = '<span class="total-count-label">Tổng:</span> <strong class="total-count-value">0</strong> <span class="total-count-unit">số</span>';
+            const emptyDanRecencyBox = document.getElementById('danRecencyBox');
+            const emptyDanRecencyBody = document.getElementById('danRecencyTableBody');
+            if (emptyDanRecencyBox) emptyDanRecencyBox.style.display = 'none';
+            if (emptyDanRecencyBody) emptyDanRecencyBody.innerHTML = '';
+            if (emptyDanAuditSummary) emptyDanAuditSummary.textContent = 'Vui lòng nạp dữ liệu hợp lệ rồi bấm “Chạy kiểm tra”.';
+            if (emptyDanAuditDetails) emptyDanAuditDetails.innerHTML = '';
+            if (emptyAnalysisStatus) emptyAnalysisStatus.textContent = 'Chưa chạy phân tích';
+            if (emptyDanAuditStatus) emptyDanAuditStatus.textContent = 'Chưa chạy kiểm tra';
+            if (emptyCopyDan) emptyCopyDan.style.display = 'none';
+            if (emptyExportDan) emptyExportDan.style.display = 'none';
+            if (emptyLotoInput) emptyLotoInput.value = '10';
+
+            // Xóa toàn bộ trạng thái hiển thị Soi vị trí để không giữ dữ liệu của file cũ.
+            svtCurrentDayIndex = -1;
+            svtHistory = [];
+            const svtResult = document.getElementById('svtResultDisplay');
+            const svtTotal = document.getElementById('svtTotalPos');
+            const svtHistoryList = document.getElementById('svtHistoryList');
+            if (svtResult) svtResult.textContent = '--';
+            if (svtTotal) svtTotal.textContent = '0';
+            const svtPos1 = document.getElementById('svtPos1');
+            const svtPos2 = document.getElementById('svtPos2');
+            if (svtPos1) svtPos1.value = '0';
+            if (svtPos2) svtPos2.value = '1';
+            if (svtHistoryList) svtRenderHistory();
+            const svtDayTabs = document.getElementById('svtDayTabs');
+            const svtTable = document.getElementById('svtTable');
+            const homeTable = document.getElementById('homeTable');
+            const svtFreq = document.getElementById('svtFreqInline');
+            const svtLast2 = document.getElementById('svtLast2Inline');
+            const svtDate = document.getElementById('svtCurrentDateLabel');
+            const homeDate = document.getElementById('homeCurrentDateLabel');
+            const svtAlert = document.getElementById('svtNewNumbersAlert');
+            const svtContent = document.getElementById('svtContent');
+            if (svtDayTabs) svtDayTabs.innerHTML = '';
+            if (svtTable) svtTable.innerHTML = '<tbody><tr><td style="padding:24px;text-align:center;color:#5a7a9a;">Chưa có dữ liệu để hiển thị</td></tr></tbody>';
+            if (homeTable) homeTable.innerHTML = '<tbody><tr><td style="padding:24px;text-align:center;color:#5a7a9a;">Chưa có dữ liệu để hiển thị</td></tr></tbody>';
+            if (svtFreq) svtFreq.innerHTML = '<span style="color:#5a7a9a;font-size:12px;">Chưa có dữ liệu</span>';
+            if (svtLast2) svtLast2.innerHTML = '<span style="color:#5a7a9a;font-size:12px;">Chưa có dữ liệu</span>';
+            if (svtDate) svtDate.textContent = '';
+            if (homeDate) homeDate.textContent = '';
+            if (svtAlert) { svtAlert.style.display = 'none'; svtAlert.innerHTML = ''; }
+            if (svtContent) svtContent.innerHTML = '<div style="text-align:center;color:#5a7a9a;padding:10px;font-size:12px;">Chưa có dữ liệu để phân tích.</div>';
+        }
+
+        let HISTORY_DATA = [];
+        let TARGET_INDEX = -1;
+
+        function selectThreeDays(endIndex) {
+            const end = Number(endIndex);
+            if (!Number.isInteger(end) || end < 1 || end >= RAW_DAYS.length) {
+                clearSelectedDays('⚠️ Cần chọn ngày có ít nhất 1 ngày trước đó để soi cầu');
+                return;
+            }
+            TARGET_INDEX = end;
+            // Mỗi lần đổi mốc phải bắt đầu từ ngày mới nhất của mốc mới;
+            // tránh giữ chỉ số ngày cũ khiến ngày nguồn bị lùi một ngày.
+            svtCurrentDayIndex = 0;
+            // HISTORY_DATA: Toàn bộ lịch sử từ ngày đầu tiên đến ngày chọn (inclusive)
+            HISTORY_DATA = RAW_DAYS.slice(0, end + 1).map(item => flattenDayData(item.data));
+            
+            // Cập nhật giao diện: hiển thị 3 ngày cuối của HISTORY_DATA
+            const selected = RAW_DAYS.slice(Math.max(0, end - 2), end + 1);
+            DAYS_DATA = selected.map(item => item.data);
+            DAY_SHORT = selected.map(item => dateLabel(item.day));
+            DAY_THU = selected.map(item => weekdayLabel(item.day));
+            flatData = DAYS_DATA.map(day => flattenDayData(day));
+            
+            // Nếu chỉ có 2 ngày, đệm thêm ngày rỗng vào đầu cho giao diện không bị lỗi
+            if (selected.length === 2) {
+                DAYS_DATA.unshift([]);
+                DAY_SHORT.unshift('--/--');
+                DAY_THU.unshift('--');
+                flatData.unshift([]);
+            }
+            
+            // Không còn dùng d1, d2, d3 ẩn nữa, và date1, date2, date3 cũng đã tạo động
+            ['infoN1', 'infoN2', 'infoN3'].forEach((id, idx) => { document.getElementById(id).textContent = getLast2DB(DAYS_DATA[idx]); });
+            
+            // Ngày dự đoán là ngày tiếp theo (nếu có trong RAW_DAYS)
+            const nextDay = end + 1 < RAW_DAYS.length ? dateLabel(RAW_DAYS[end + 1].day) : 'Dự đoán';
+            document.getElementById('predBadge').textContent = `🎯 ${nextDay}`;
+            
+            scan();
+            if (document.getElementById('tabDashboard').classList.contains('active')) {
+                renderDashboard();
+            }
+        }
+
+        function onDateChange() {
+            const select = document.getElementById('targetDate');
+            if (select.value === '-1') {
+                clearSelectedDays();
+                return;
+            }
+            selectThreeDays(parseInt(select.value, 10));
+        }
+
+        function refreshVisibleDays(days) {
+            RAW_DAYS = days;
+            updateDateDropdown();
+            const select = document.getElementById('targetDate');
+            select.value = String(days.length - 1);
+            selectThreeDays(days.length - 1);
+        }
+
+        function showTxtDebug(parsed) {
+            const div = document.getElementById('debugInfo');
+            div.classList.add('show');
+            updateDataSummary(parsed);
+            const quality = getDataQuality(parsed);
+            div.innerHTML = `<b>Dữ liệu đã nạp:</b> ${parsed.length} ngày | Từ ${quality.from} đến ${quality.to}<br>` + parsed.map((item, idx) => `${idx + 1}. ${item.day} → ĐB: ${getLast2DB(item.data)}`).join('<br>');
+        }
+
+        function clearImportedData() {
+            if (!confirm('Xóa toàn bộ dữ liệu hiện tại và đưa ứng dụng về trạng thái trống?')) return;
+            APP_DATA.days = [];
+            APP_DATA.flatData = [];
+            APP_DATA.posMapCache = null;
+            RAW_DAYS = [];
+            HISTORY_DATA = [];
+            DAYS_DATA = [];
+            DAY_SHORT = [];
+            DAY_THU = [];
+            flatData = [];
+            TARGET_INDEX = -1;
+            currentRows = [];
+            updateDateDropdown();
+            clearSelectedDays('⚠️ Chưa có dữ liệu. Hãy vào Trang chủ để nạp file TXT.');
+            const debugInfo = document.getElementById('debugInfo');
+            if (debugInfo) {
+                debugInfo.classList.remove('show');
+                debugInfo.innerHTML = '';
+            }
+            const uploadStatus = document.getElementById('uploadStatus');
+            if (uploadStatus) {
+                uploadStatus.innerHTML = '<i class="fas fa-info-circle"></i> Chưa nạp file';
+                uploadStatus.style.color = '#5a7a9a';
+            }
+            const dataSummary = document.getElementById('dataSummary');
+            if (dataSummary) {
+                dataSummary.innerHTML = '<strong>Trạng thái:</strong> Chưa có dữ liệu TXT được nạp.';
+                dataSummary.style.display = 'none';
+            }
+            const targetDate = document.getElementById('targetDate');
+            if (targetDate) {
+                targetDate.value = '-1';
+                targetDate.disabled = true;
+            }
+            const sessionStatus = document.getElementById('sessionStatusBar');
+            if (sessionStatus) {
+                sessionStatus.innerHTML = '';
+                sessionStatus.style.display = 'none';
+            }
+            setStatus('ready');
+            switchTab('tabDashboard');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    // BƯỚC 1: Parse và Validate (sẽ throw lỗi nếu sai)
+                    const parsed = parseTxtContent(e.target.result);
+                    if (parsed.length < 3) throw new Error('File cần có ít nhất 3 ngày dữ liệu.');
+                    
+                    // BƯỚC 2: Commit (Chỉ cập nhật nếu không có lỗi)
+                    APP_DATA.days = parsed;
+                    APP_DATA.flatData = parsed.map(day => flattenDayData(day.data));
+                    APP_DATA.posMapCache = null;
+                    
+                    RAW_DAYS = APP_DATA.days;
+                    flatData = APP_DATA.flatData;
+                    svtCurrentDayIndex = -1;
+                    svtHistory = [];
+                    
+                    refreshVisibleDays(parsed);
+                    if (document.getElementById('tabSoiViTri')?.classList.contains('active')) {
+                        svtRenderDayTabs();
+                        svtRenderHistory();
+                    }
+                    showTxtDebug(parsed);
+                    
+                    const safeFileName = String(file.name).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+                    document.getElementById('uploadStatus').innerHTML = `<i class="fas fa-check-circle"></i> Đã tải: ${safeFileName} (${parsed.length} ngày)`;
+                    document.getElementById('uploadStatus').style.color = '#4ade80';
+                    updateDataSummary(parsed);
+
+                    // Dọn báo cáo Phân tích lịch sử cũ (nếu có) khi nạp file mới — tránh giữ báo cáo
+                    // của file/mốc cũ có thể tham chiếu tới các mốc ngày không còn hợp lệ với dữ liệu
+                    // mới (đã gây lỗi khi bấm vào ô "CẦU 2 NGÀY" cũ sau khi đổi dữ liệu). CHỈ reset
+                    // hiển thị của khung Phân tích — không đụng RAW_DAYS/HISTORY_DATA/TARGET_INDEX.
+                    const staleAnalysis = document.getElementById('analysisReport');
+                    const staleAnalysisStatus = document.getElementById('analysisStatus');
+                    if (staleAnalysis) staleAnalysis.innerHTML = '<div style="text-align:center;color:#5a7a9a;padding:20px;">Bấm "Phân tích lịch sử" để quét dữ liệu TXT.</div>';
+                    if (staleAnalysisStatus) { staleAnalysisStatus.textContent = 'Chưa chạy phân tích'; staleAnalysisStatus.style.color = ''; }
+
+                    // (Mốc đã được cập nhật và phân tích sẵn bên trong refreshVisibleDays() ở trên —
+                    // không gọi lại updateDateDropdown()/selectThreeDays() lần nữa để tránh chạy scan() trùng lặp)
+                    
+                    // Chuyển về Trang chủ (Dashboard) để xem tổng quan
+                    switchTab('tabDashboard');
+                } catch (error) {
+                    document.getElementById('uploadStatus').innerHTML = '<i class="fas fa-exclamation-circle"></i> File không hợp lệ';
+                    document.getElementById('uploadStatus').style.color = '#f87171';
+                    alert('Lỗi dữ liệu TXT: ' + error.message);
+                    console.error(error);
+                }
+            };
+            reader.readAsText(file, 'UTF-8');
+            event.target.value = '';
+        }
+
+        function buildPositionMap() {
+            if (APP_DATA.posMapCache) return APP_DATA.posMapCache;
+            if (!APP_DATA.days || !APP_DATA.days.length) return [];
+            
+            const map = [];
+            const dayData = APP_DATA.days[0].data; // Cấu trúc các ngày là như nhau
+            let currentPos = 0;
+            
+            for (const row of dayData) {
+                for (let numberOrder = 0; numberOrder < row.numbers.length; numberOrder++) {
+                    const num = row.numbers[numberOrder];
+                    const str = String(num);
+                    for (let i = 0; i < str.length; i++) {
+                        map.push({
+                            label: row.label,
+                            numberIndex: i,
+                            numberOrder,
+                            pos: currentPos + i
+                        });
+                    }
+                    currentPos += str.length;
+                }
+            }
+            APP_DATA.posMapCache = map;
+            return map;
+        }
+
+        function getPositionInfo(dayIdx, pos) {
+            const map = buildPositionMap();
+            if (pos >= 0 && pos < map.length) {
+                const info = { ...map[pos] };
+                
+                // Lấy giá trị digit thực tế từ dữ liệu ngày
+                const sourceDays = DISPLAY_DAYS_DATA.length ? DISPLAY_DAYS_DATA : DAYS_DATA;
+                const targetIdx = (dayIdx < 0 || dayIdx >= sourceDays.length) ? Math.max(0, sourceDays.length - 1) : dayIdx;
+                const dayData = sourceDays[targetIdx];
+                
+                if (dayData) {
+                    const row = dayData.find(r => r.label === info.label);
+                    if (row) {
+                        // numberIndex là chỉ số chữ số bên trong chính số thứ numberOrder,
+                        // không phải chỉ số tính lại từ đầu cả hàng giải.
+                        const num = row.numbers[info.numberOrder];
+                        if (num !== undefined) {
+                            const str = String(num);
+                            info.number = num;
+                            info.value = str[info.numberIndex] ?? '';
+                        }
+                    }
+                }
+                return info;
+            }
+            return null;
+        }
+
+        function findPositionsForPair(dayIdx, v1, v2) {
+            const result = { v1: null, v2: null, v1Label: '', v2Label: '', v1Num: '', v2Num: '' };
+            
+            const info1 = getPositionInfo(dayIdx, v1);
+            if (info1) {
+                result.v1 = info1.value;
+                result.v1Label = info1.label;
+                result.v1Num = info1.number;
+            }
+            
+            const info2 = getPositionInfo(dayIdx, v2);
+            if (info2) {
+                result.v2 = info2.value;
+                result.v2Label = info2.label;
+                result.v2Num = info2.number;
+            }
+
+            return result;
+        }
+
+        // ================================================================
+        // HIGHLIGHT VỊ TRÍ - KÍCH THƯỚC VỪA PHẢI
+        // ================================================================
+        function highlightPosition(v1, v2) {
+            // Xóa highlight cũ
+            document.querySelectorAll('.digit.highlight-pos-digit, .number-tag.highlight-pos').forEach(el => {
+                el.classList.remove('highlight-pos-digit');
+                el.classList.remove('highlight-pos');
+                el.style.transform = '';
+                el.style.fontSize = '';
+                el.style.boxShadow = '';
+                el.style.background = '';
+                el.style.color = '';
+                el.style.zIndex = '';
+                el.style.padding = '';
+                el.style.borderRadius = '';
+                el.style.borderColor = '';
+                el.style.position = '';
+            });
+
+            if (v1 === undefined || v2 === undefined || v1 < 0 || v2 < 0) return false;
+
+            let found = false;
+            const allDigits = document.querySelectorAll('.digit');
+
+            allDigits.forEach(el => {
+                const pos = parseInt(el.dataset.pos);
+                const day = parseInt(el.dataset.day);
+                const parentBlock = el.closest('.number-tag');
+
+            // Highlight đồng đều trên tất cả các ngày đang hiển thị trong bảng.
+            // Cùng một cặp vị trí cần được nhìn thấy xuyên suốt lịch sử cầu.
+            if (pos === v1 || pos === v2) {
+                    found = true;
+                    el.classList.add('highlight-pos-digit');
+
+                    // Kích thước vừa phải, không quá to
+                    el.style.transform = 'scale(1.35)';
+                    el.style.fontSize = '19px';
+                    el.style.fontWeight = '800';
+                    el.style.zIndex = '5';
+                    el.style.position = 'relative';
+                    el.style.padding = '0 4px';
+                    el.style.borderRadius = '3px';
+
+                    if (pos === v1) {
+                        el.style.color = '#4ade80';
+                        el.style.background = 'rgba(74, 222, 128, 0.2)';
+                        el.style.boxShadow = '0 0 15px rgba(74, 222, 128, 0.3)';
+                    } else {
+                        el.style.color = 'var(--color-v2)';
+                        el.style.background = 'var(--color-v2-bg)';
+                        el.style.boxShadow = '0 0 15px var(--color-v2-glow)';
+                    }
+
+                    if (parentBlock) {
+                        parentBlock.classList.add('highlight-pos');
+                        parentBlock.style.borderColor = 'rgba(79, 172, 254, 0.35)';
+                        parentBlock.style.background = 'rgba(79, 172, 254, 0.06)';
+                        parentBlock.style.boxShadow = '0 0 20px rgba(79, 172, 254, 0.08)';
+                        parentBlock.style.transform = 'scale(1.02)';
+                    }
+                }
+            });
+
+            // Cập nhật legend
+            const legend = document.querySelector('.xs-legend');
+            const existingInfo = legend?.querySelector('.click-info');
+            if (existingInfo) existingInfo.remove();
+
+            if (found && legend) {
+                const targetDayIdx = DISPLAY_TARGET_DAY_IDX >= 0 ? DISPLAY_TARGET_DAY_IDX : 2;
+                const info1 = getPositionInfo(targetDayIdx, v1);
+                const info2 = getPositionInfo(targetDayIdx, v2);
+                const span = document.createElement('span');
+                span.className = 'click-info';
+                span.style.cssText = `
+                    color: #f1c40f;
+                    font-weight: 700;
+                    background: rgba(241,196,15,0.08);
+                    padding: 2px 14px;
+                    border-radius: 6px;
+                    border: 1px solid rgba(241,196,15,0.15);
+                    font-size: 11px;
+                `;
+                span.innerHTML = `
+                    🎯 VT${v1} (${info1?.label || ''}) 
+                    <span style="color: var(--color-v1);">●</span> 
+                    VT${v2} (${info2?.label || ''})
+                    <span style="color: var(--color-v2);">●</span>
+                `;
+                legend.appendChild(span);
+            }
+
+            // Cuộn đến vị trí đầu tiên
+            const firstHighlight = document.querySelector('.digit.highlight-pos-digit');
+            if (firstHighlight) {
+                firstHighlight.closest('.number-tag')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+
+            return found;
+        }
+
+        // ================================================================
+        // CẤU HÌNH HIỂN THỊ
+        // ================================================================
+        function saveConfig() {
+            const blink = document.getElementById('cfgBlink').checked;
+            const hover = document.getElementById('cfgHover').checked;
+            const colorA = document.getElementById('cfgColorA').value;
+            const colorB = document.getElementById('cfgColorB').value;
+            const colorSpecial = document.getElementById('cfgColorSpecial').value;
+            const colorDup = document.getElementById('cfgColorDup').value;
+            const pulse = document.getElementById('cfgPulse').checked;
+            const fontSize = document.getElementById('cfgFontSize').value;
+            const detailDefault = document.getElementById('cfgDetailDefault').value;
+            const analysisDefault = document.getElementById('cfgAnalysisDefault').value;
+            const tableBg = document.getElementById('cfgTableBg').value;
+            const textColor = document.getElementById('cfgTextColor').value;
+            const bodyBg = document.getElementById('cfgBodyBg').value;
+            const cardBg = document.getElementById('cfgCardBg').value;
+            const radius = document.getElementById('cfgRadius').value;
+            const blur = document.getElementById('cfgBlur').checked;
+            const danFreq1 = document.getElementById('cfgDanFreq1').value;
+            const danFreq2 = document.getElementById('cfgDanFreq2').value;
+            const danFreq3 = document.getElementById('cfgDanFreq3').value;
+            const danFreq4 = document.getElementById('cfgDanFreq4').value;
+            const danFreqHigh = document.getElementById('cfgDanFreqHigh').value;
+
+            const config = { blink, hover, colorA, colorB, colorSpecial, colorDup, pulse, fontSize, detailDefault, analysisDefault, tableBg, textColor, bodyBg, cardBg, radius, blur, danFreq1, danFreq2, danFreq3, danFreq4, danFreqHigh };
+            const previous = JSON.parse(localStorage.getItem('danglamConfig') || '{}');
+            localStorage.setItem('danglamConfig', JSON.stringify(config));
+            applyConfig(config);
+            if (previous.analysisDefault !== analysisDefault) applyAnalysisAccordionDefault();
+        }
+
+        function loadConfig() {
+            const saved = localStorage.getItem('danglamConfig');
+            if (!saved) {
+                resetConfig();
+                return;
+            }
+            try {
+                const config = JSON.parse(saved);
+                config.blink = config.blink !== false;
+                config.colorA = /^#[0-9a-f]{6}$/i.test(config.colorA || '') ? config.colorA : '#4ade80';
+                config.colorB = /^#[0-9a-f]{6}$/i.test(config.colorB || '') ? config.colorB : '#38d9ff';
+                config.colorSpecial = /^#[0-9a-f]{6}$/i.test(config.colorSpecial || '') ? config.colorSpecial : '#ff4757';
+                config.colorDup = /^#[0-9a-f]{6}$/i.test(config.colorDup || '') ? config.colorDup : '#4ade80';
+                config.pulse = config.pulse !== false;
+                config.fontSize = ['small', 'normal', 'large'].includes(config.fontSize) ? config.fontSize : 'normal';
+                config.detailDefault = config.detailDefault === 'open' ? 'open' : 'closed';
+                config.analysisDefault = config.analysisDefault === 'open' ? 'open' : 'closed';
+                config.tableBg = /^#[0-9a-f]{6}$/i.test(config.tableBg || '') ? config.tableBg : '#0a0e1a';
+                config.textColor = /^#[0-9a-f]{6}$/i.test(config.textColor || '') ? config.textColor : '#e8edf5';
+                config.bodyBg = /^#[0-9a-f]{6}$/i.test(config.bodyBg || '') ? config.bodyBg : '#0a0e1a';
+                config.cardBg = /^#[0-9a-f]{6}$/i.test(config.cardBg || '') ? config.cardBg : '#11182a';
+                config.danFreq1 = /^#[0-9a-f]{6}$/i.test(config.danFreq1 || '') ? config.danFreq1 : '#60a5fa';
+                config.danFreq2 = /^#[0-9a-f]{6}$/i.test(config.danFreq2 || '') ? config.danFreq2 : '#2dd4bf';
+                config.danFreq3 = /^#[0-9a-f]{6}$/i.test(config.danFreq3 || '') ? config.danFreq3 : '#facc15';
+                config.danFreq4 = /^#[0-9a-f]{6}$/i.test(config.danFreq4 || '') ? config.danFreq4 : '#c4b5fd';
+                config.danFreqHigh = /^#[0-9a-f]{6}$/i.test(config.danFreqHigh || '') ? config.danFreqHigh : '#fb7185';
+                config.radius = ['normal', 'sharp', 'round'].includes(config.radius) ? config.radius : 'normal';
+                config.blur = config.blur !== false;
+                config.hover = config.hover !== false;
+                // Tự nâng màu VT B cũ sang màu sáng hơn; màu tùy chỉnh khác của người dùng vẫn được giữ nguyên.
+                if (config.colorB.toLowerCase() === '#5b8cff') config.colorB = '#38d9ff';
+                document.getElementById('cfgBlink').checked = config.blink;
+                document.getElementById('cfgHover').checked = config.hover;
+                document.getElementById('cfgColorA').value = config.colorA;
+                document.getElementById('cfgColorB').value = config.colorB;
+                document.getElementById('cfgColorSpecial').value = config.colorSpecial;
+                document.getElementById('cfgColorDup').value = config.colorDup;
+                document.getElementById('cfgPulse').checked = config.pulse;
+                document.getElementById('cfgFontSize').value = config.fontSize;
+                document.getElementById('cfgDetailDefault').value = config.detailDefault;
+                document.getElementById('cfgAnalysisDefault').value = config.analysisDefault;
+                document.getElementById('cfgTableBg').value = config.tableBg;
+                document.getElementById('cfgTextColor').value = config.textColor;
+                document.getElementById('cfgBodyBg').value = config.bodyBg;
+                document.getElementById('cfgCardBg').value = config.cardBg;
+                document.getElementById('cfgDanFreq1').value = config.danFreq1;
+                document.getElementById('cfgDanFreq2').value = config.danFreq2;
+                document.getElementById('cfgDanFreq3').value = config.danFreq3;
+                document.getElementById('cfgDanFreq4').value = config.danFreq4;
+                document.getElementById('cfgDanFreqHigh').value = config.danFreqHigh;
+                document.getElementById('cfgRadius').value = config.radius;
+                document.getElementById('cfgBlur').checked = config.blur;
+                applyConfig(config);
+            } catch (error) {
+                console.warn('Cấu hình lưu cục bộ không hợp lệ, đã khôi phục mặc định.', error);
+                resetConfig();
+            }
+        }
+
+        function resetConfig() {
+            const config = {
+                blink: true,
+                hover: true,
+                colorA: '#4ade80',
+                colorB: '#38d9ff',
+                colorSpecial: '#ff4757',
+                colorDup: '#4ade80',
+                pulse: true,
+                fontSize: 'normal',
+                detailDefault: 'closed',
+                analysisDefault: 'closed',
+                tableBg: '#0a0e1a',
+                textColor: '#e8edf5',
+                bodyBg: '#0a0e1a',
+                cardBg: '#11182a',
+                danFreq1: '#60a5fa',
+                danFreq2: '#2dd4bf',
+                danFreq3: '#facc15',
+                danFreq4: '#c4b5fd',
+                danFreqHigh: '#fb7185',
+                radius: 'normal',
+                blur: true
+            };
+            document.getElementById('cfgBlink').checked = config.blink;
+            document.getElementById('cfgHover').checked = config.hover;
+            document.getElementById('cfgColorA').value = config.colorA;
+            document.getElementById('cfgColorB').value = config.colorB;
+            document.getElementById('cfgColorSpecial').value = config.colorSpecial;
+            document.getElementById('cfgColorDup').value = config.colorDup;
+            document.getElementById('cfgPulse').checked = config.pulse;
+            document.getElementById('cfgFontSize').value = config.fontSize;
+            document.getElementById('cfgDetailDefault').value = config.detailDefault;
+            document.getElementById('cfgAnalysisDefault').value = config.analysisDefault;
+            document.getElementById('cfgTableBg').value = config.tableBg;
+            document.getElementById('cfgTextColor').value = config.textColor;
+            document.getElementById('cfgBodyBg').value = config.bodyBg;
+            document.getElementById('cfgCardBg').value = config.cardBg;
+            document.getElementById('cfgDanFreq1').value = config.danFreq1;
+            document.getElementById('cfgDanFreq2').value = config.danFreq2;
+            document.getElementById('cfgDanFreq3').value = config.danFreq3;
+            document.getElementById('cfgDanFreq4').value = config.danFreq4;
+            document.getElementById('cfgDanFreqHigh').value = config.danFreqHigh;
+            document.getElementById('cfgRadius').value = config.radius;
+            document.getElementById('cfgBlur').checked = config.blur;
+            localStorage.setItem('danglamConfig', JSON.stringify(config));
+            applyConfig(config);
+        }
+
+        function hexToRgbA(hex, alpha) {
+            let c;
+            if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                c= hex.substring(1).split('');
+                if(c.length== 3){
+                    c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+                }
+                c= '0x'+c.join('');
+                return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
+            }
+            return `rgba(255,255,255,${alpha})`;
+        }
+
+        function applyConfig(config) {
+            const root = document.documentElement;
+            root.style.setProperty('--color-v1', config.colorA);
+            root.style.setProperty('--color-v1-bg', hexToRgbA(config.colorA, 0.2));
+            root.style.setProperty('--color-v1-glow', hexToRgbA(config.colorA, 0.08));
+            
+            root.style.setProperty('--color-v2', config.colorB);
+            root.style.setProperty('--color-v2-bg', hexToRgbA(config.colorB, 0.2));
+            root.style.setProperty('--color-v2-glow', hexToRgbA(config.colorB, 0.08));
+            root.style.setProperty('--xs-table-bg', config.tableBg || '#0a0e1a');
+            root.style.setProperty('--ui-text-color', config.textColor || '#e8edf5');
+            root.style.setProperty('--ui-body-bg', config.bodyBg || '#0a0e1a');
+            root.style.setProperty('--ui-card-bg', config.cardBg || '#11182a');
+            root.style.setProperty('--ui-radius-container', config.radius === 'sharp' ? '8px' : config.radius === 'round' ? '36px' : '28px');
+            root.style.setProperty('--ui-radius-card', config.radius === 'sharp' ? '4px' : config.radius === 'round' ? '20px' : '12px');
+            root.style.setProperty('--ui-radius-control', config.radius === 'sharp' ? '4px' : config.radius === 'round' ? '14px' : '8px');
+            document.body.classList.remove('ui-font-small', 'ui-font-normal', 'ui-font-large', 'ui-no-blur');
+            document.body.classList.add('ui-font-' + (config.fontSize || 'normal'));
+            if (config.blur === false) document.body.classList.add('ui-no-blur');
+            const styleEl = document.getElementById('dynamicStyle') || document.createElement('style');
+            styleEl.id = 'dynamicStyle';
+            
+            let css = '';
+            if (config.hover) {
+                css += `
+                    .xs-table .numbers-cell .number-tag:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(79, 172, 254, 0.2); transform: scale(1.05); z-index: 2; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+                    .svt-inline-tag:hover { background: rgba(255, 255, 255, 0.1); transform: scale(1.08); box-shadow: 0 4px 8px rgba(0,0,0,0.15); z-index: 2; position: relative; cursor: default; }
+                `;
+            } else {
+                css += `
+                    .xs-table .numbers-cell .number-tag:hover { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.05); transform: none; box-shadow: none; }
+                    .svt-inline-tag:hover { transform: none; box-shadow: none; cursor: default; }
+                `;
+            }
+            if (config.blink) {
+                css += `
+                    .xs-table .numbers-cell .digit.highlight-v1 { animation: blinkEffect 1.5s infinite; }
+                    .xs-table .numbers-cell .digit.highlight-v2 { animation: blinkEffect 1.5s infinite; }
+                `;
+            } else {
+                css += `
+                    .xs-table .numbers-cell .digit.highlight-v1 { animation: none !important; }
+                    .xs-table .numbers-cell .digit.highlight-v2 { animation: none !important; }
+                `;
+            }
+            
+            // Thêm CSS động cho Soi Vị Trí
+            const colorSpecial = config.colorSpecial || '#ff4757';
+            const colorDup = config.colorDup || '#4ade80';
+            const pulseAnim = config.pulse ? 'pulse-highlight 1.5s ease-in-out infinite' : 'none';
+            
+            css += `
+                .svt-special-label { color: ${colorSpecial} !important; }
+                .svt-special-num { background: ${hexToRgbA(colorSpecial, 0.15)} !important; color: ${colorSpecial} !important; border-color: ${hexToRgbA(colorSpecial, 0.2)} !important; }
+                .svt-special-num .digit { color: ${colorSpecial} !important; }
+                .svt-digit.highlight { animation: ${pulseAnim} !important; }
+                .svt-inline-tag.duplicate { color: ${colorDup} !important; border-color: ${hexToRgbA(colorDup, 0.3)} !important; background: ${hexToRgbA(colorDup, 0.12)} !important; box-shadow: 0 0 12px ${hexToRgbA(colorDup, 0.08)}; }
+                .svt-inline-tag.gdb-highlight { color: #ff4757 !important; border-color: rgba(255,71,87,0.55) !important; background: rgba(255,71,87,0.16) !important; box-shadow: 0 0 12px rgba(255,71,87,0.12); }
+            `;
+            
+            const danColors = {
+                danFreq1: config.danFreq1 || '#60a5fa', danFreq2: config.danFreq2 || '#2dd4bf', danFreq3: config.danFreq3 || '#facc15', danFreq4: config.danFreq4 || '#c4b5fd', danFreqHigh: config.danFreqHigh || '#fb7185'
+            };
+            css += `
+                #tabDanSo .freq-1 { --dan-accent: ${danColors.danFreq1}; background: linear-gradient(145deg, ${hexToRgbA(danColors.danFreq1,.24)}, ${hexToRgbA(danColors.danFreq1,.12)}) !important; color: ${danColors.danFreq1} !important; border-color: ${hexToRgbA(danColors.danFreq1,.48)} !important; }
+                #tabDanSo .freq-2 { --dan-accent: ${danColors.danFreq2}; background: linear-gradient(145deg, ${hexToRgbA(danColors.danFreq2,.24)}, ${hexToRgbA(danColors.danFreq2,.12)}) !important; color: ${danColors.danFreq2} !important; border-color: ${hexToRgbA(danColors.danFreq2,.48)} !important; }
+                #tabDanSo .freq-3 { --dan-accent: ${danColors.danFreq3}; background: linear-gradient(145deg, ${hexToRgbA(danColors.danFreq3,.24)}, ${hexToRgbA(danColors.danFreq3,.12)}) !important; color: ${danColors.danFreq3} !important; border-color: ${hexToRgbA(danColors.danFreq3,.48)} !important; }
+                #tabDanSo .freq-4 { --dan-accent: ${danColors.danFreq4}; background: linear-gradient(145deg, ${hexToRgbA(danColors.danFreq4,.24)}, ${hexToRgbA(danColors.danFreq4,.12)}) !important; color: ${danColors.danFreq4} !important; border-color: ${hexToRgbA(danColors.danFreq4,.48)} !important; }
+                #tabDanSo .freq-high { --dan-accent: ${danColors.danFreqHigh}; background: linear-gradient(145deg, ${hexToRgbA(danColors.danFreqHigh,.24)}, ${hexToRgbA(danColors.danFreqHigh,.12)}) !important; color: ${danColors.danFreqHigh} !important; border-color: ${hexToRgbA(danColors.danFreqHigh,.48)} !important; }
+            `;
+            styleEl.innerHTML = css;
+            document.head.appendChild(styleEl);
+        }
+
+        // ================================================================
+        // RENDER BẢNG KẾT QUẢ
+        // ================================================================
+        let currentV1 = -1;
+        let currentV2 = -1;
+        let DISPLAY_DAYS_DATA = [];
+        let DISPLAY_DAY_LABELS = [];
+        let DISPLAY_TARGET_DAY_IDX = -1;
+
+        function renderXS(v1, v2, daysCount = 3) {
+            currentV1 = v1;
+            currentV2 = v2;
+            const table = document.getElementById('xsTable');
+
+            if (!RAW_DAYS || RAW_DAYS.length === 0 || !DAYS_DATA || DAYS_DATA.length === 0) {
+                document.getElementById('xsTitle').innerHTML = `<i class="fas fa-table"></i> KẾT QUẢ XỔ SỐ`;
+                document.getElementById('dateLabels').innerHTML = '';
+                table.innerHTML = '<tbody><tr><td style="padding:24px;text-align:center;color:#5a7a9a;">Chưa có dữ liệu để hiển thị</td></tr></tbody>';
+                DISPLAY_DAYS_DATA = [];
+                DISPLAY_DAY_LABELS = [];
+                DISPLAY_TARGET_DAY_IDX = -1;
+                return;
+            }
+
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            // Số ngày tối đa có thể hiển thị tính đến ngày hiện tại (endIndex) là endIndex + 1
+            const maxAvailable = endIndex + 1;
+            const displayCount = Math.min(daysCount, maxAvailable);
+            
+            document.getElementById('xsTitle').innerHTML = `<i class="fas fa-table"></i> KẾT QUẢ XỔ SỐ ${displayCount} NGÀY GẦN NHẤT`;
+
+            const startIndex = Math.max(0, endIndex - displayCount + 1);
+            // Chỉ đảo thứ tự trình bày: ngày mới nhất ở cột trái, không đảo RAW_DAYS hay dữ liệu lõi.
+            const selectedDays = RAW_DAYS.slice(startIndex, endIndex + 1).reverse();
+            
+            const daysData = selectedDays.map(item => item.data);
+            const dayShort = selectedDays.map(item => dateLabel(item.day));
+            const dayThu = selectedDays.map(item => weekdayLabel(item.day));
+            const numCols = daysData.length;
+            DISPLAY_DAYS_DATA = daysData;
+            DISPLAY_DAY_LABELS = dayShort;
+            // Sau khi hiển thị mới nhất → cũ hơn, ngày mốc nằm ở cột đầu tiên.
+            DISPLAY_TARGET_DAY_IDX = 0;
+
+            const dateLabelsContainer = document.getElementById('dateLabels');
+            let labelsHtml = '';
+            dayShort.forEach(ds => {
+                labelsHtml += `<span class="d active">${ds}</span>`;
+            });
+            const nextDay = endIndex + 1 < RAW_DAYS.length ? dateLabel(RAW_DAYS[endIndex + 1].day) : 'Dự đoán';
+            labelsHtml += `<span class="d pred-day">🎯 ${nextDay}</span>`;
+            dateLabelsContainer.innerHTML = labelsHtml;
+
+            function getPositions(dayData) {
+                const posMap = {};
+                let currentPos = 0;
+                for (const row of dayData) {
+                    const label = row.label;
+                    const numbers = row.numbers;
+                    const startPos = currentPos;
+                    const endPos = currentPos + numbers.reduce((sum, n) => sum + String(n).length, 0) - 1;
+                    posMap[label] = { start: startPos, end: endPos, numbers: numbers, special: row.special || false };
+                    currentPos = endPos + 1;
+                }
+                return posMap;
+            }
+
+            const posMap = getPositions(daysData[0]);
+
+                        const htmlParts = [];
+            htmlParts.push('<thead><tr>');
+            htmlParts.push('<td style="border-bottom:none;padding:6px 8px;font-weight:700;color:#4facfe;font-size:11px;text-align:right;padding-right:14px;">GIẢI</td>');
+            for (let d = 0; d < numCols; d++) {
+                htmlParts.push(`<td style="border-bottom:none;padding:6px 8px;text-align:center;font-weight:700;color:#4facfe;font-size:12px;">${dayShort[d]}<br><span style="font-weight:400;color:#5a6a8a;font-size:9px;">${dayThu[d]}</span></td>`);
+            }
+            htmlParts.push('</tr></thead><tbody>');
+
+            const labelOrder = ['Đặc biệt', 'Giải nhất', 'Giải nhì', 'Giải ba', 'Giải tư', 'Giải năm', 'Giải sáu', 'Giải bảy'];
+
+            for (const label of labelOrder) {
+                const posInfo = posMap[label];
+                if (!posInfo) continue;
+
+                const isSpecial = posInfo.special;
+                const numbersList = posInfo.numbers;
+
+                const isMultiRow = (label === 'Giải ba' || label === 'Giải năm');
+                const numRows = isMultiRow ? 2 : 1;
+                const perRow = isMultiRow ? 3 : numbersList.length;
+
+                const startPos = posInfo.start;
