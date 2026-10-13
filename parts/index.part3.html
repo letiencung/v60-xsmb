@@ -1,0 +1,1492 @@
+                for (let row = 0; row < numRows; row++) {
+                    htmlParts.push('<tr>');
+
+                    if (row === 0) {
+                        const labelClass = isSpecial ? 'special' : '';
+                        htmlParts.push(`<td class="label-cell"><span class="${labelClass}">${label}</span></td>`);
+                    } else {
+                        htmlParts.push(`<td class="label-cell" style="color:#3a4a6a;"></td>`);
+                    }
+
+                    for (let d = 0; d < numCols; d++) {
+                        const dayData = daysData[d];
+                        const dayNumbers = dayData.find(r => r.label === label)?.numbers || [];
+
+                        const startIdx = row * perRow;
+                        const endIdx = Math.min(startIdx + perRow, dayNumbers.length);
+
+                        htmlParts.push('<td><div class="numbers-cell">');
+
+                        for (let i = startIdx; i < endIdx; i++) {
+                            const numStr = String(dayNumbers[i] || '');
+                            let globalPos = startPos;
+                            for (let k = 0; k < i; k++) {
+                                globalPos += String(dayNumbers[k] || '').length;
+                            }
+
+                            htmlParts.push(`<span class="number-tag" onclick="clickNumber(${d}, ${globalPos}, '${numStr}')">`);
+
+                            for (let j = 0; j < numStr.length; j++) {
+                                const pos = globalPos + j;
+                                let cls = 'digit';
+
+                                // Áp dụng hiệu ứng cho mọi ngày thực tế trong cửa sổ đang hiển thị.
+                                // DISPLAY_TARGET_DAY_IDX chỉ xác định ngày mốc, không phải giới hạn highlight.
+                                if (d < numCols) {
+                                    if (pos === v1) cls += ' highlight-v1';
+                                    else if (pos === v2) cls += ' highlight-v2';
+                                }
+                                if (label === 'Đặc biệt' && (j === 3 || j === 4)) cls += ' highlight-db';
+                                if (isSpecial) cls += ' special-num';
+
+                                htmlParts.push(`<span class="${cls}" data-pos="${pos}" data-day="${d}">${numStr[j]}</span>`);
+                            }
+
+                            htmlParts.push(`<span class="pos-tooltip">VT${globalPos} → VT${globalPos + numStr.length - 1}</span></span>`);
+                        }
+
+                        htmlParts.push('</div></td>');
+                    }
+                    htmlParts.push('</tr>');
+                }
+            }
+            htmlParts.push('</tbody>');
+            table.innerHTML = htmlParts.join('');
+        }
+
+        function clickNumber(dayIdx, startPos, numStr) {
+            const pos = startPos;
+            const info = getPositionInfo(dayIdx, pos);
+            const day = DISPLAY_DAY_LABELS[dayIdx] || DAY_SHORT[dayIdx] || '--/--';
+            
+            // Giữ nguyên cửa sổ đang xem, tránh quay về 3 ngày khi đang xem cầu dài.
+            const keepDays = Math.max(3, DISPLAY_DAYS_DATA.length || 3);
+            
+            // Click vào số nào thì set v1 = pos đó để xem nó đang sáng ở đâu
+            renderXS(pos, currentV2, keepDays);
+            highlightPosition(pos, currentV2);
+
+            if (info) {
+                const legend = document.querySelector('.xs-legend');
+                const existingInfo = legend?.querySelector('.click-info');
+                if (existingInfo) existingInfo.remove();
+
+                if (legend) {
+                    const span = document.createElement('span');
+                    span.className = 'click-info';
+                    span.style.cssText =
+                        'color:#4facfe;font-weight:600;background:rgba(79,172,254,0.06);padding:2px 10px;border-radius:4px;border:1px solid rgba(79,172,254,0.1);';
+                    span.textContent = `📍 VT${info.pos} · ${info.label} · ${day}`;
+                    legend.appendChild(span);
+                }
+            }
+        }
+
+        // ================================================================
+        // STATE
+        // ================================================================
+        let currentRows = [];
+        let currentFilter = 'all';
+        let currentDayFilter = 'all';
+
+        // ================================================================
+        // RENDER CẦU
+        // ================================================================
+        function renderDayFilters(rows) {
+            const box = document.getElementById('cauDayFilters');
+            if (!box) return;
+
+            const counts = {};
+            rows.forEach(r => {
+                const bucket = r.soNgayChay >= 4 ? '4+' : String(r.soNgayChay);
+                counts[bucket] = (counts[bucket] || 0) + 1;
+            });
+
+            const order = ['1', '2', '3', '4+'];
+            let html = `<button class="day-filter-btn ${currentDayFilter === 'all' ? 'active' : ''}" onclick="setDayFilter('all')">Tất cả</button>`;
+            order.forEach(bucket => {
+                if (counts[bucket]) {
+                    const label = bucket === '4+' ? '4N+' : `${bucket}N`;
+                    html += `<button class="day-filter-btn ${currentDayFilter === bucket ? 'active' : ''}" onclick="setDayFilter('${bucket}')">${label} (${counts[bucket]})</button>`;
+                }
+            });
+            box.innerHTML = html;
+        }
+
+        function renderCauList(rows, filter) {
+            const list = document.getElementById('cauList');
+            closeDetailPanel();
+
+            let filtered = rows;
+            if (filter === 'straight') filtered = filtered.filter(r => r.type === 'Toàn Thuận');
+            else if (filter === 'inverted') filtered = filtered.filter(r => r.type === 'Toàn Đảo');
+            else if (filter === 'mixed') filtered = filtered.filter(r => r.type === 'Hỗn hợp');
+
+            renderDayFilters(filtered);
+            if (currentDayFilter !== 'all') {
+                filtered = filtered.filter(r => currentDayFilter === '4+' ? r.soNgayChay >= 4 : r.soNgayChay === Number(currentDayFilter));
+            }
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<span class="empty">🔍 Không tìm thấy cầu trong nhóm này</span>';
+                return;
+            }
+
+            const htmlParts = [];
+            filtered.forEach((r, idx) => {
+                const meta = {
+                    'Toàn Thuận': { soClass:'exact-so', badgeClass:'exact', color:'#4ade80' },
+                    'Toàn Đảo': { soClass:'dao-so', badgeClass:'dao', color:'#38d9ff' },
+                    'Hỗn hợp': { soClass:'mixed-so', badgeClass:'mixed', color:'#fbbf24' },
+                    'Toàn SAME': { soClass:'mixed-so', badgeClass:'mixed', color:'#94a3b8' }
+                }[r.type] || { soClass:'mixed-so', badgeClass:'mixed', color:'#94a3b8' };
+                htmlParts.push(`
+                    <div class="item" id="cau-item-${idx}" title="${r.type} · Mẫu ${r.pattern} · Chạy ${r.soNgayChay}N" onclick="showDetailPanel(${idx}, ${r.a}, ${r.b}, '${r.pred}', '${r.type}', ${r.soNgayChay}, '${r.historyArr.join(',')}', '${r.pattern}')">
+                        <div class="badge-type ${meta.badgeClass}"></div>
+                        <span class="so ${meta.soClass}" style="color:${meta.color};">${r.pred}</span>
+                        <span class="days">${r.soNgayChay}N</span>
+                    </div>
+                `);
+            });
+            list.innerHTML = htmlParts.join('');
+        }
+
+        function setDayFilter(day) {
+            currentDayFilter = day;
+            renderCauList(currentRows, currentFilter);
+        }
+
+        let detailExpanded = false;
+
+        function toggleCauDetail() {
+            const panel = document.getElementById('cauDetailPanel');
+            const button = document.getElementById('detailToggleBtn');
+            if (!panel || !button) return;
+            detailExpanded = !detailExpanded;
+            panel.classList.toggle('details-expanded', detailExpanded);
+            panel.classList.toggle('details-collapsed', !detailExpanded);
+            button.innerHTML = detailExpanded
+                ? '<i class="fas fa-minus"></i> Thu gọn'
+                : '<i class="fas fa-plus"></i> Chi tiết';
+            button.title = detailExpanded ? 'Ẩn lịch sử và đối chiếu GĐB' : 'Hiện lịch sử và đối chiếu GĐB';
+        }
+
+        // ================================================================
+        // NGUỒN LOGIC DUY NHẤT cho quy ước "SỐ KÉP KẾ THỪA" trên toàn hệ thống.
+        // Mọi nơi hiển thị nhãn Thuận/Đảo/Hỗn hợp/SAME theo từng ngày (Tìm Cầu,
+        // Tìm Cầu và các phần hiển thị liên quan PHẢI gọi qua đây — không tự viết lại
+        // logic riêng, để tránh lặp lại kiểu lỗi SAME từng lan ra nhiều nơi.
+        //
+        // Đầu vào: mảng mã 'E' | 'I' | 'S' theo đúng thứ tự thời gian (cũ -> mới).
+        // Đầu ra: mảng nhãn cùng độ dài, mỗi phần tử là nhãn hiển thị cho ngày đó.
+        // Quy tắc: E/I tự xác lập hướng (hoặc chuyển Hỗn hợp nếu ngược hướng đang
+        // có); S kế thừa nguyên trạng thái hướng của ngày liền trước, không đổi
+        // state; S ở đầu chuỗi (chưa có hướng nào) => "Chưa xác định".
+        // ================================================================
+        function inheritedLabelsForCodes(codes) {
+            let state = null; // null | 'E' | 'I' | 'Mixed'
+            return codes.map(code => {
+                let label;
+                if (code === 'E') {
+                    state = (state === 'I') ? 'Mixed' : (state === 'Mixed' ? 'Mixed' : 'E');
+                    label = state === 'Mixed' ? 'Hỗn hợp' : 'Thuận';
+                } else if (code === 'I') {
+                    state = (state === 'E') ? 'Mixed' : (state === 'Mixed' ? 'Mixed' : 'I');
+                    label = state === 'Mixed' ? 'Hỗn hợp' : 'Đảo';
+                } else { // 'S' — kế thừa, không đổi state
+                    label = state === 'E' ? 'Thuận (kế thừa)' : state === 'I' ? 'Đảo (kế thừa)' : state === 'Mixed' ? 'Hỗn hợp (kế thừa)' : 'Chưa xác định';
+                }
+                return label;
+            });
+        }
+
+        // Dịch chuỗi pattern thô (VD "I-S", "E-E") sang nhãn kế thừa dễ đọc.
+        function describePatternWithInheritance(patternStr) {
+            if (!patternStr) return '--';
+            return inheritedLabelsForCodes(patternStr.split('-')).join(' → ');
+        }
+
+        function showDetailPanel(idx, a, b, pred, type, days, historyStr, patternStr = '') {
+            document.querySelectorAll('.cau-list .item').forEach(el => el.classList.remove('active'));
+            const itemEl = document.getElementById(`cau-item-${idx}`);
+            if (itemEl) itemEl.classList.add('active');
+
+            const panel = document.getElementById('cauDetailPanel');
+            
+            // Mặc định này chỉ điều khiển cách hiển thị; không thay đổi cách Scan hay dữ liệu lịch sử.
+            const detailMode = document.getElementById('cfgDetailDefault')?.value || 'closed';
+            detailExpanded = detailMode === 'open';
+            panel.classList.toggle('details-expanded', detailExpanded);
+            panel.classList.toggle('details-collapsed', !detailExpanded);
+            const detailToggleBtn = document.getElementById('detailToggleBtn');
+            if (detailToggleBtn) {
+                detailToggleBtn.innerHTML = detailExpanded
+                    ? '<i class="fas fa-minus"></i> Thu gọn'
+                    : '<i class="fas fa-plus"></i> Chi tiết';
+                detailToggleBtn.title = detailExpanded ? 'Ẩn lịch sử và đối chiếu GĐB' : 'Hiện lịch sử và đối chiếu GĐB';
+            }
+            
+            // Render lại bảng với số ngày mở rộng tương ứng với số ngày chạy (days) + 1 ngày dự đoán.
+            // Nếu days < 3, vẫn hiển thị tối thiểu 3 ngày cho đẹp.
+            const displayDays = Math.max(3, days + 1);
+            renderXS(a, b, displayDays);
+            
+            // Sau khi hiển thị mới nhất → cũ hơn, ngày đầu tiên của DISPLAY_DAYS_DATA là ngày mốc đã chọn.
+            // pred được tạo từ hai chữ số của ngày mốc này; ngày kế tiếp chỉ là ngày dự đoán.
+            const sourceDayIdx = DISPLAY_TARGET_DAY_IDX;
+            const posInfo = findPositionsForPair(sourceDayIdx, a, b);
+
+            const typeColor = type === 'Toàn Đảo' ? '#38d9ff' : (type === 'Hỗn hợp' ? '#fbbf24' : '#4ade80');
+            
+            // Dòng tóm tắt chỉ giữ số cầu và cặp vị trí; thông tin còn lại nằm trong Chi tiết.
+            document.getElementById('cdCau').innerHTML = `
+                <span style="color:${typeColor}; font-size:18px; margin-right:4px;">${pred}</span> 
+                <span style="color:#5a7a9a; font-size:14px; margin:0 4px;">&middot;</span> 
+                <span class="detail-position-focus" title="Cặp vị trí tạo ra cầu"><span class="position-label">VT</span><span class="position-pair">${a} &times; ${b}</span></span>
+            `;
+            
+            const typeNote = document.getElementById('cdTypeNote');
+            if (typeNote) {
+                typeNote.innerHTML = `
+                    <div style="margin:3px 0 5px; font-size:9px; color:#9aa8c7; line-height:1.3;">
+                        Nhóm: <b style="color:${typeColor};">${type}</b> · Mẫu: <b>${describePatternWithInheritance(patternStr)}</b> · Khớp: <b>${days}N</b>
+                    </div>
+                    ${type === 'Hỗn hợp' ? '<div style="margin:0 0 5px; font-size:9px; color:#9aa8c7; line-height:1.3;"><i>* Hỗn hợp hiển thị theo chiều Đảo (B+A) theo quy ước quan sát; chưa khẳng định chiều nào tốt hơn.</i></div>' : ''}
+                `;
+            }
+
+            // Đếm tần suất và tìm lần ra gần nhất cho cả chiều thuận và chiều đảo của cặp vị trí này
+            // posInfo.v1 và posInfo.v2 là chữ số đơn lẻ tại vị trí đó (0-9).
+            // posInfo.v1Num là toàn bộ số giải (vd: 7853).
+            let predS = String(posInfo.v1) + String(posInfo.v2);
+            let predI = String(posInfo.v2) + String(posInfo.v1);
+            let statS = { freq: 0, gan: -1, lastDate: null };
+            let statI = { freq: 0, gan: -1, lastDate: null };
+            
+            if (RAW_DAYS && RAW_DAYS.length > 0) {
+                const selectedEnd = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+                for (let t = 0; t <= selectedEnd; t++) {
+                    const db = getLast2DB(RAW_DAYS[t].data);
+                    if (db === predS) {
+                        statS.freq++;
+                        statS.gan = selectedEnd - t;
+                        statS.lastDate = RAW_DAYS[t].day;
+                    }
+                    if (db === predI) {
+                        statI.freq++;
+                        statI.gan = selectedEnd - t;
+                        statI.lastDate = RAW_DAYS[t].day;
+                    }
+                }
+            }
+
+            const formatGan = (gan) => {
+                if (gan === -1) return '<span style="color:#94a3b8;">Chưa ra</span>';
+                if (gan > 10) return `<span style="color:#fca5a5;">Gan ${gan} ngày</span>`;
+                if (gan <= 3) return `<span style="color:#99f6e4;">Mới ra (${gan} ngày)</span>`;
+                return `<span style="color:#fde68a;">Cách ${gan} ngày</span>`;
+            };
+
+            const gdbCompare = document.getElementById('cdGdbCompare');
+            if (gdbCompare) {
+                gdbCompare.innerHTML = `
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div style="color:#7a8aaa; font-size:11px; margin-bottom:4px; text-transform:uppercase; font-weight:700;">Đối chiếu lịch sử GĐB</div>
+                        <table style="width:100%; font-size:11px; color:#e8edf5; border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:2px 0; color:#4ade80;">Thuận ${predS}</td>
+                                <td style="padding:2px 0; text-align:center;">${statS.freq} lần</td>
+                                <td style="padding:2px 0; text-align:right;">${formatGan(statS.gan)}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:2px 0; color:#38d9ff;">Đảo ${predI}</td>
+                                <td style="padding:2px 0; text-align:center;">${statI.freq} lần</td>
+                                <td style="padding:2px 0; text-align:right;">${formatGan(statI.gan)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+            }
+
+            const histArr = historyStr.split(',');
+            let histHtml = '';
+            
+            // Dùng HISTORY_DATA để lấy đúng nhãn ngày
+            const totalN = HISTORY_DATA.length;
+            const startT = Math.max(0, totalN - days - 1);
+            
+            for (let i = 0; i < histArr.length; i++) {
+                const dayIndex = startT + i;
+                const dayLabel = dayIndex < RAW_DAYS.length ? dateLabel(RAW_DAYS[dayIndex].day) : '';
+                const hNum = histArr[i];
+                
+                if (i === histArr.length - 1) {
+                    histHtml += `<span style="color:#7a8aaa;">${dayLabel}:</span> <strong style="color:#fff;">${hNum}</strong> &rarr; <span style="color:#f1c40f;">Dự đoán</span>`;
+                } else {
+                    const targetDB = (dayIndex + 1 < RAW_DAYS.length) ? getLast2DB(RAW_DAYS[dayIndex + 1].data) : '';
+                    histHtml += `<span style="color:#7a8aaa;">${dayLabel}:</span> <strong style="color:#fff;">${hNum}</strong> &rarr; <span style="color:#4ade80;">ĐB${targetDB}</span>`;
+                }
+                if (i < histArr.length - 1) histHtml += ' <span style="color:#3a5a7a; margin:0 4px;">&middot;</span> ';
+            }
+            document.getElementById('cdHistory').innerHTML = histHtml;
+
+            panel.classList.add('active');
+            highlightPosition(a, b);
+            
+            // Cập nhật badge
+            const badge = document.getElementById('cauStatusBadge');
+            if(badge) {
+                badge.innerHTML = `<i class="fas fa-eye"></i> Đang xem: ${pred}`;
+                badge.style.color = '#4facfe';
+                badge.style.borderColor = 'rgba(79,172,254,0.3)';
+                badge.style.background = 'rgba(79,172,254,0.1)';
+            }
+        }
+
+        function closeDetailPanel() {
+            const panel = document.getElementById('cauDetailPanel');
+            detailExpanded = false;
+            if (panel) {
+                panel.classList.remove('active', 'details-expanded');
+                panel.classList.add('details-collapsed');
+            }
+            document.querySelectorAll('.cau-list .item').forEach(el => el.classList.remove('active'));
+            // Khôi phục bảng về 3 ngày mặc định và xóa highlight
+            renderXS(-1, -1, 3);
+            
+            // Cập nhật lại badge
+            setStatus('complete');
+        }
+
+        function setFilter(type) {
+            currentFilter = type;
+            document.querySelectorAll('.cau-filters .filter-btn').forEach(btn => {
+                btn.className = 'filter-btn';
+            });
+            let filterName = 'Tất cả';
+            if (type === 'all') {
+                document.getElementById('filterAll').classList.add('active-all');
+            } else if (type === 'straight') {
+                document.getElementById('filterStraight').classList.add('active-straight');
+                filterName = 'Toàn Thuận';
+            } else if (type === 'inverted') {
+                document.getElementById('filterInverted').classList.add('active-inverted');
+                filterName = 'Toàn Đảo';
+            } else if (type === 'mixed') {
+                document.getElementById('filterMixed').classList.add('active-mixed');
+                filterName = 'Hỗn hợp';
+            }
+            renderCauList(currentRows, currentFilter);
+            
+            const badge = document.getElementById('cauStatusBadge');
+            if(badge) {
+                badge.innerHTML = `<i class="fas fa-filter"></i> Lọc: ${filterName}`;
+                badge.style.color = '#a29bfe';
+                badge.style.borderColor = 'rgba(162,155,254,0.3)';
+                badge.style.background = 'rgba(162,155,254,0.1)';
+            }
+        }
+
+        function updateStats(rows) {
+            const validRows = rows;
+            const total = validRows.length;
+            const exact = validRows.filter(r => r.type === 'Toàn Thuận').length;
+            const dao = validRows.filter(r => r.type === 'Toàn Đảo').length;
+            const mixed = validRows.filter(r => r.type === 'Hỗn hợp').length;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statExact').textContent = exact;
+            document.getElementById('statDao').textContent = dao;
+            document.getElementById('statMixed').textContent = mixed;
+        }
+
+        // ================================================================
+        // PHÂN TÍCH NHIỀU NGÀY
+        // ================================================================
+        // ================================================================
+        // CẦU 2 NGÀY LIÊN TIẾP TRÙNG GĐB — tính tại một mốc bất kỳ (lùi dần)
+        //
+        // QUAN TRỌNG: hàm này PHẢI dùng đúng vòng lặp lùi-đến-khi-gãy giống
+        // hệt scan(), tuyệt đối KHÔNG được rút gọn thành kiểm tra cố định
+        // 2 bước (kiểu "match1 && match2") — đó chính xác là nguyên nhân gây
+        // lỗi đếm nhầm cả chuỗi 3N+ vào nhóm "2N" ở hàm getBroken2NExclusions
+        // cũ (đã gỡ bỏ). Chạy đủ vòng lặp đến khi thực sự gãy rồi mới lọc
+        // run === 2 mới cho ra đúng số cầu 2 ngày, không lẫn 3N/4N...
+        // ================================================================
+        function computeRun2AtIndex(endIndex) {
+            if (!Number.isInteger(endIndex) || endIndex < 1 || endIndex >= RAW_DAYS.length) return null;
+            const historyData = RAW_DAYS.slice(0, endIndex + 1).map(item => flattenDayData(item.data));
+            const n = historyData.length;
+            const byPred = new Map(); // pred -> [ {a, b}, ... ]
+            let pairCount = 0;
+
+            for (let a = 0; a < 107; a++) {
+                for (let b = a + 1; b < 107; b++) {
+                    let run = 0;
+                    let hasE = false, hasI = false;
+                    for (let t = n - 2; t >= 0; t--) {
+                        const p = String(historyData[t][a]) + String(historyData[t][b]);
+                        const pRev = String(historyData[t][b]) + String(historyData[t][a]);
+                        const db = getLast2DB(RAW_DAYS[t + 1].data);
+                        const isSame = p === pRev; // A=B: khớp cả 2 chiều cùng lúc, không nói lên hướng nào
+                        if (p === db) { if (!isSame) hasE = true; run++; }
+                        else if (pRev === db) { hasI = true; run++; }
+                        else break;
+                    }
+                    // SỬA (theo phản hồi người dùng): trước đây chỉ lấy ĐÚNG run===2, khiến các
+                    // cặp đang chạy ≥3 ngày (đo được xảy ra ~2.8% số ngày trong lịch sử) bị BỎ SÓT
+                    // hoàn toàn khỏi mục này — dù đó là cầu đáng chú ý nhất vì đang chạy dài hơn.
+                    // Nay lấy toàn bộ run>=2 nhưng LUÔN giữ đúng số ngày thật (runLen) để hiển thị
+                    // rõ ràng — khác với lỗi 2N/3N cũ (lỗi cũ là ĐẾM SAI thành 2N, còn ở đây là
+                    // HIỂN THỊ ĐÚNG số ngày thật, không gộp nhầm ý nghĩa).
+                    if (run < 2) continue;
+
+                    // Không có bằng chứng hướng thật nào (toàn SAME) — vẫn là cầu hợp lệ
+                    // (giá trị khớp thật), chỉ là không xác định được Thuận/Đảo. Mặc định hiển thị
+                    // theo chiều thuận trong trường hợp hiếm này.
+                    const type = hasI ? 'I' : 'E';
+                    const predStraight = String(historyData[n - 1][a]) + String(historyData[n - 1][b]);
+                    const predInverted = String(historyData[n - 1][b]) + String(historyData[n - 1][a]);
+                    const pred = type === 'E' ? predStraight : predInverted;
+                    if (!byPred.has(pred)) byPred.set(pred, []);
+                    byPred.get(pred).push({ a, b, type, runLen: run });
+                    pairCount++;
+                }
+            }
+
+            const groups = [...byPred.entries()]
+                .map(([pred, pairList]) => ({ pred, pairs: pairList.map(p => `VT ${p.a} × VT ${p.b}`) }))
+                .sort((x, y) => Number(x.pred) - Number(y.pred));
+
+            // flatPairs: MỖI CẶP VỊ TRÍ MỘT DÒNG RIÊNG, không gộp theo số dự đoán —
+            // dùng khi cần xem đầy đủ từng cặp, kể cả khi nhiều cặp cùng ra 1 số.
+            // Giữ nguyên a, b, type để có thể bấm xem chi tiết vị trí (giống Tìm cầu)
+            // và để áp dụng lại đúng chiều (Thuận/Đảo) khi đối chiếu với ngày khác sau này.
+            const flatPairs = [];
+            for (const [pred, pairList] of byPred.entries()) {
+                for (const { a, b, type, runLen } of pairList) {
+                    flatPairs.push({ pred, a, b, type, runLen, pairLabel: `VT ${a} × VT ${b}` });
+                }
+            }
+            flatPairs.sort((x, y) => Number(x.pred) - Number(y.pred) || x.pairLabel.localeCompare(y.pairLabel, 'vi', { numeric: true }));
+
+            return {
+                predValues: groups.map(g => g.pred),
+                groups,
+                flatPairs,
+                pairCount
+            };
+        }
+
+        // ================================================================
+        // CHI TIẾT VỊ TRÍ CHO "CẦU 2 NGÀY" — tham khảo đúng cách hiển thị
+        // của showDetailPanel() ở tab Tìm cầu (vị trí + đối chiếu lịch sử),
+        // nhưng tính độc lập theo mốc (endIndex) riêng của từng dòng, KHÔNG
+        // phụ thuộc TARGET_INDEX/DAYS_DATA đang chọn ở tab Tìm cầu.
+        // ================================================================
+        function getPositionValueAtDay(dayData, pos) {
+            const map = buildPositionMap();
+            if (pos < 0 || pos >= map.length) return null;
+            const info = { ...map[pos] };
+            const row = (dayData || []).find(r => r.label === info.label);
+            if (row) {
+                const num = row.numbers[info.numberOrder];
+                if (num !== undefined) {
+                    const str = String(num);
+                    info.number = num;
+                    info.value = str[info.numberIndex] ?? '';
+                }
+            }
+            return info;
+        }
+
+        function selectRun2Chip(chipEl, rowIdx, endIndex, a, b, pred, runLen = 2) {
+            const rowContainer = chipEl.closest('.run2-chip-row');
+            const detailEl = document.getElementById(`run2-shared-${rowIdx}`);
+            if (!rowContainer || !detailEl) return;
+
+            const wasActive = chipEl.classList.contains('active');
+            rowContainer.querySelectorAll('.run2-chip.active').forEach(el => el.classList.remove('active'));
+
+            if (wasActive) {
+                // Bấm lại đúng ô đang mở -> đóng lại.
+                detailEl.classList.remove('open');
+                return;
+            }
+            chipEl.classList.add('active');
+
+            // Bảo vệ: nếu dữ liệu đã được nạp lại/thay đổi sau khi báo cáo này được tạo (mốc endIndex
+            // không còn hợp lệ với RAW_DAYS hiện tại), báo rõ cho người dùng thay vì để lỗi JS âm thầm.
+            if (!Number.isInteger(endIndex) || endIndex < 2 || endIndex >= RAW_DAYS.length) {
+                detailEl.innerHTML = '<div style="padding:10px;color:#fbbf24;background:rgba(251,191,36,0.08);border-radius:6px;">⚠ Dữ liệu đã thay đổi kể từ khi báo cáo này được tạo. Vui lòng bấm lại "Phân tích lịch sử" để cập nhật.</div>';
+                detailEl.classList.add('open');
+                return;
+            }
+
+            const dayData = RAW_DAYS[endIndex].data;
+            const infoA = getPositionValueAtDay(dayData, a);
+            const infoB = getPositionValueAtDay(dayData, b);
+            if (!infoA || !infoB) { detailEl.innerHTML = '<div style="padding:8px;color:#f87171;">Không đọc được vị trí.</div>'; detailEl.classList.add('open'); return; }
+
+            // Hiển thị ĐỦ toàn bộ chuỗi (runLen ngày, không cứng 2) — SỬA theo phản hồi người dùng:
+            // trước đây luôn hiện đúng 2 ngày cuối dù cầu chạy dài hơn, gây thiếu thông tin cho các
+            // ô 3N+ (chỉ thấy 2/3, 2/4... ngày, không thấy trọn chuỗi).
+            const safeRunLen = Math.max(2, Math.min(runLen || 2, endIndex));
+            const matches = [];
+            for (let step = 1; step <= safeRunLen; step++) {
+                const dayIdx = endIndex - safeRunLen + step;
+                const prevData = flattenDayData(RAW_DAYS[dayIdx - 1].data);
+                const p = String(prevData[a]) + String(prevData[b]);
+                const pRev = String(prevData[b]) + String(prevData[a]);
+                const db = getLast2DB(RAW_DAYS[dayIdx].data);
+                const isSame = p === pRev; // A=B: khớp cả 2 chiều cùng lúc, không nói lên hướng nào
+                const direction = p === db ? (isSame ? 'S' : 'E') : (pRev === db ? 'I' : null);
+                matches.push({ dateLabel: dateLabel(RAW_DAYS[dayIdx].day), value: db, direction });
+            }
+            const matchRows = matches.map(m => {
+                const dirText = m.direction === 'E' ? 'Thuận' : (m.direction === 'I' ? 'Đảo' : (m.direction === 'S' ? 'Trùng' : '?'));
+                const dirColor = m.direction === 'E' ? '#4ade80' : (m.direction === 'I' ? '#38d9ff' : '#c9b48a');
+                return `<tr><td style="padding:3px 6px 3px 0;color:#8aa0c8;">${m.dateLabel}</td><td style="padding:3px 6px;font-family:monospace;font-weight:800;font-size:14px;color:#f1c40f;">${m.value}</td><td style="padding:3px 6px;text-align:right;color:${dirColor};font-weight:700;">${dirText}</td></tr>`;
+            }).join('');
+
+            const mocLabel = dateLabel(RAW_DAYS[endIndex].day);
+            const streakNote = safeRunLen > 2 ? ` <span style="color:#f1c40f;">(chuỗi dài hơn 2 ngày thông thường)</span>` : '';
+            detailEl.innerHTML = `
+                <div style="padding:10px 12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; font-size:11px;">
+                    <div style="color:#7a8aaa; font-weight:700; margin-bottom:6px; text-transform:uppercase; font-size:10px;">Ô đang xem: <span style="color:#f1c40f;">${pred}</span> (VT ${a} × VT ${b}) — vị trí tại mốc ${mocLabel}</div>
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:8px;">
+                        <thead><tr style="color:#5a7a9a;"><td style="padding:2px 6px 2px 0;">Vị trí</td><td style="padding:2px 6px;">Thuộc giải</td><td style="padding:2px 6px;">Số gốc</td><td style="padding:2px 6px;text-align:right;">Chữ số</td></tr></thead>
+                        <tbody>
+                            <tr><td style="padding:2px 6px 2px 0;color:#4facfe;">VT ${a}</td><td style="padding:2px 6px;">${infoA.label}</td><td style="padding:2px 6px;font-family:monospace;">${infoA.number ?? '--'}</td><td style="padding:2px 6px;text-align:right;font-weight:700;color:#fff;">${infoA.value ?? '--'}</td></tr>
+                            <tr><td style="padding:2px 6px 2px 0;color:#4facfe;">VT ${b}</td><td style="padding:2px 6px;">${infoB.label}</td><td style="padding:2px 6px;font-family:monospace;">${infoB.number ?? '--'}</td><td style="padding:2px 6px;text-align:right;font-weight:700;color:#fff;">${infoB.value ?? '--'}</td></tr>
+                        </tbody>
+                    </table>
+                    <div style="color:#7a8aaa; font-weight:700; margin-bottom:4px; text-transform:uppercase; font-size:10px;">Cầu này về liên tiếp ${safeRunLen} ngày GĐB gần nhất${streakNote}</div>
+                    <table style="width:100%; border-collapse:collapse;">${matchRows}</table>
+                </div>
+            `;
+            detailEl.classList.add('open');
+        }
+
+        // Chi tiết cho dòng "Tổng hợp vị trí 5 ngày" — CHỈ hiển thị giá trị vị trí thật
+        // tại đúng ngày mới nhất, KHÔNG hiển thị bảng "khớp liên tiếp 2 ngày" như
+        // selectRun2Chip(), vì các cặp ở đây được gom từ nhiều mốc khác nhau trong
+        // 5 ngày qua — không có gì đảm bảo cặp đó vẫn đang có chuỗi khớp 2 ngày tính
+        // đến hôm nay. Nói rõ điều này ra để không gây hiểu nhầm.
+        function selectCombinedChip(chipEl, endIndex, a, b, value) {
+            const rowContainer = chipEl.closest('.run2-chip-row');
+            const detailEl = document.getElementById('run2-shared-combined');
+            if (!rowContainer || !detailEl) return;
+
+            const wasActive = chipEl.classList.contains('active');
+            rowContainer.querySelectorAll('.run2-chip.active').forEach(el => el.classList.remove('active'));
+            if (wasActive) { detailEl.classList.remove('open'); return; }
+            chipEl.classList.add('active');
+
+            if (!Number.isInteger(endIndex) || endIndex < 0 || endIndex >= RAW_DAYS.length) {
+                detailEl.innerHTML = '<div style="padding:10px;color:#fbbf24;background:rgba(251,191,36,0.08);border-radius:6px;">⚠ Dữ liệu đã thay đổi kể từ khi báo cáo này được tạo. Vui lòng bấm lại "Phân tích lịch sử" để cập nhật.</div>';
+                detailEl.classList.add('open');
+                return;
+            }
+
+            const dayData = RAW_DAYS[endIndex].data;
+            const infoA = getPositionValueAtDay(dayData, a);
+            const infoB = getPositionValueAtDay(dayData, b);
+            if (!infoA || !infoB) { detailEl.innerHTML = '<div style="padding:8px;color:#f87171;">Không đọc được vị trí.</div>'; detailEl.classList.add('open'); return; }
+
+            const mocLabel = dateLabel(RAW_DAYS[endIndex].day);
+            detailEl.innerHTML = `
+                <div style="padding:10px 12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; font-size:11px;">
+                    <div style="color:#7a8aaa; font-weight:700; margin-bottom:6px; text-transform:uppercase; font-size:10px;">Ô đang xem: <span style="color:#f1c40f;">${value}</span> (VT ${a} × VT ${b}) — vị trí tại ngày mới nhất ${mocLabel}</div>
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead><tr style="color:#5a7a9a;"><td style="padding:2px 6px 2px 0;">Vị trí</td><td style="padding:2px 6px;">Thuộc giải</td><td style="padding:2px 6px;">Số gốc</td><td style="padding:2px 6px;text-align:right;">Chữ số</td></tr></thead>
+                        <tbody>
+                            <tr><td style="padding:2px 6px 2px 0;color:#4facfe;">VT ${a}</td><td style="padding:2px 6px;">${infoA.label}</td><td style="padding:2px 6px;font-family:monospace;">${infoA.number ?? '--'}</td><td style="padding:2px 6px;text-align:right;font-weight:700;color:#fff;">${infoA.value ?? '--'}</td></tr>
+                            <tr><td style="padding:2px 6px 2px 0;color:#4facfe;">VT ${b}</td><td style="padding:2px 6px;">${infoB.label}</td><td style="padding:2px 6px;font-family:monospace;">${infoB.number ?? '--'}</td><td style="padding:2px 6px;text-align:right;font-weight:700;color:#fff;">${infoB.value ?? '--'}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top:8px;color:#fbbf24;font-size:10.5px;line-height:1.5;"><i class="fas fa-triangle-exclamation"></i> Vị trí này được gom từ lịch sử cầu 2 ngày trong 5 ngày qua, áp vào đúng dữ liệu mới nhất — không có nghĩa là cầu này đang có chuỗi khớp 2 ngày tính đến hôm nay.</p>
+                </div>
+            `;
+            detailEl.classList.add('open');
+        }
+
+
+        let analysisNumberStats = { gdb: [], loto: [] };
+        let analysisFreqThresholds = {
+            gdb: { warm: 0, hot: 0 },
+            loto: { warm: 0, hot: 0 }
+        };
+        // Cửa sổ này chỉ điều khiển thống kê Loto trong tab Phân tích;
+        // không dùng chung với svtNumDays, tìm cầu, soi vị trí hoặc tạo dàn.
+        let analysisLotoNumDays = 10;
+
+        function analysisLotoFrequencyMeta(freq) {
+            if (freq <= 0) return { badge: 'analysis-number-zero', color: '#94a3b8', label: '0 lần · chưa xuất hiện' };
+            if (freq === 1) return { badge: 'analysis-number-loto-1', color: '#bfdbfe', label: '1 lần · tần suất thấp' };
+            if (freq === 2) return { badge: 'analysis-number-loto-2', color: '#7dd3fc', label: '2 lần · tần suất nhẹ' };
+            if (freq === 3) return { badge: 'analysis-number-loto-3', color: '#fde68a', label: '3 lần · tần suất trung bình' };
+            if (freq === 4) return { badge: 'analysis-number-loto-4', color: '#fdba74', label: '4 lần · tần suất cao' };
+            return { badge: 'analysis-number-loto-hot', color: '#fecdd3', label: '5+ lần · tần suất quá nóng' };
+        }
+
+        function analysisNumberBadgeClass(freq, kind = 'gdb') {
+            if (kind === 'loto') return analysisLotoFrequencyMeta(freq).badge;
+            const threshold = analysisFreqThresholds[kind] || { warm: 0, hot: 0 };
+            if (freq >= threshold.hot && threshold.hot > 0) return 'analysis-number-hot';
+            if (freq >= threshold.warm && threshold.warm > 0) return 'analysis-number-warm';
+            if (freq >= 1) return 'analysis-number-normal';
+            return 'analysis-number-low';
+        }
+
+        function analysisGanHtml(item) {
+            if (item.ganDays === -1) return '<span class="analysis-gan-never">Chưa ra</span>';
+            if (item.ganDays >= 11) return `<span class="analysis-gan-deep">${item.ganDays} ngày</span>`;
+            if (item.ganDays >= 4) return `<span class="analysis-gan-long">${item.ganDays} ngày</span>`;
+            return `<span class="analysis-gan-recent">${item.ganDays} ngày</span>`;
+        }
+
+        function renderAnalysisNumberRows(sortKey = 'number', kind = 'gdb') {
+            const bodyId = kind === 'loto' ? 'analysisLotoNumberBody' : 'analysisGdbNumberBody';
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            const rows = [...(analysisNumberStats[kind] || [])].sort((a, b) => {
+                if (sortKey === 'freq') return b.freq - a.freq || a.number - b.number;
+                if (sortKey === 'gan') {
+                    const ag = a.ganDays === -1 ? 9999 : a.ganDays;
+                    const bg = b.ganDays === -1 ? 9999 : b.ganDays;
+                    return bg - ag || a.number - b.number;
+                }
+                return a.number - b.number;
+            });
+            body.innerHTML = rows.map(item => `
+                <tr>
+                    <td><span class="analysis-number-badge ${analysisNumberBadgeClass(item.freq, kind)}" title="${kind === 'loto' ? analysisLotoFrequencyMeta(item.freq).label : `Tần suất ${item.freq} lần`}">${item.label}</span></td>
+                    <td style="font-weight:700; color:${kind === 'loto' ? analysisLotoFrequencyMeta(item.freq).color : (item.freq >= (analysisFreqThresholds[kind]?.warm || 9999) ? '#fde68a' : '#cbd5e1')};">${item.freq} lần</td>
+                    <td>${item.lastDate ? dateLabel(item.lastDate) : '<span class="analysis-gan-never">Chưa ra</span>'}</td>
+                    ${kind === 'loto' ? `<td>${item.gdbLastDate ? dateLabel(item.gdbLastDate) : '<span class="analysis-gan-never">Chưa ra</span>'}</td>` : ''}
+                    <td>${analysisGanHtml(item)}</td>
+                </tr>
+            `).join('');
+            document.querySelectorAll(`#analysisNumberCard .analysis-sort-btn[data-kind="${kind}"]`).forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.sort === sortKey);
+            });
+        }
+
+        function sortAnalysisNumberTable(sortKey, kind = 'gdb') {
+            renderAnalysisNumberRows(sortKey, kind);
+        }
+
+        function getAnalysisLotoWindow(endIndex) {
+            const input = document.getElementById('analysisLotoNumDays');
+            let numDays = Number.parseInt(input?.value ?? analysisLotoNumDays, 10);
+            if (!Number.isFinite(numDays) || numDays < 2) numDays = 2;
+            numDays = Math.min(30, numDays, endIndex + 1);
+            analysisLotoNumDays = Math.max(2, numDays);
+            if (input) input.value = String(analysisLotoNumDays);
+            const startIndex = Math.max(0, endIndex - analysisLotoNumDays + 1);
+            return {
+                numDays: analysisLotoNumDays,
+                startIndex,
+                days: RAW_DAYS.slice(startIndex, endIndex + 1)
+            };
+        }
+
+        function buildAnalysisGdbSummary(gdbStats) {
+            const appeared = gdbStats.filter(item => item.freq > 0).length;
+            const never = gdbStats.filter(item => item.freq === 0).length;
+            const maxFreq = Math.max(0, ...gdbStats.map(item => item.freq));
+            const maxCodes = gdbStats.filter(item => item.freq === maxFreq && maxFreq > 0).slice(0, 3).map(item => item.label).join(' · ') || '—';
+            return `
+                <div class="analysis-gdb-summary" aria-label="Tóm tắt tần suất GĐB">
+                    <div class="analysis-gdb-summary-item"><span>ĐÃ RA</span><strong>${appeared}</strong><small>mã</small></div>
+                    <div class="analysis-gdb-summary-item"><span>CHƯA RA</span><strong>${never}</strong><small>mã</small></div>
+                    <div class="analysis-gdb-summary-item"><span>CAO NHẤT</span><strong>${maxFreq}</strong><small>lần</small></div>
+                    <div class="analysis-gdb-summary-item"><span>MÃ CAO NHẤT</span><strong style="font-size:12px;">${maxCodes}</strong></div>
+                </div>
+            `;
+        }
+
+        function getLotoStatsForWindow(lotoDays, gdbStats = []) {
+            const nLoto = lotoDays.length;
+            return Array.from({ length: 100 }, (_, number) => {
+                const label = String(number).padStart(2, '0');
+                let freq = 0;
+                let lastIndex = -1;
+                for (let idx = 0; idx < nLoto; idx++) {
+                    let appearedThisDay = false;
+                    const dayData = lotoDays[idx]?.data || [];
+                    dayData.forEach(prize => {
+                        (prize.numbers || []).forEach(value => {
+                            const valueStr = String(value).padStart(2, '0');
+                            if (valueStr.slice(-2) === label) {
+                                freq++;
+                                appearedThisDay = true;
+                            }
+                        });
+                    });
+                    if (appearedThisDay) lastIndex = idx;
+                }
+                return {
+                    number,
+                    label,
+                    freq,
+                    lastDate: lastIndex >= 0 && lotoDays[lastIndex] ? lotoDays[lastIndex].day : null,
+                    gdbLastDate: gdbStats[number]?.lastDate || null,
+                    ganDays: lastIndex >= 0 ? (nLoto - 1 - lastIndex) : -1
+                };
+            });
+        }
+
+        function refreshLotoAnalysisOnly() {
+            if (!RAW_DAYS || RAW_DAYS.length === 0) {
+                alert('Chưa có dữ liệu TXT.');
+                return;
+            }
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const lotoWindow = getAnalysisLotoWindow(endIndex);
+            const lotoStats = getLotoStatsForWindow(lotoWindow.days, analysisNumberStats.gdb || []);
+            const sortedFrequencies = lotoStats.map(item => item.freq).sort((a, b) => a - b);
+            analysisNumberStats = { ...analysisNumberStats, loto: lotoStats };
+            analysisFreqThresholds = {
+                ...analysisFreqThresholds,
+                loto: {
+                    warm: sortedFrequencies[Math.floor(sortedFrequencies.length * 0.50)] || 0,
+                    hot: sortedFrequencies[Math.floor(sortedFrequencies.length * 0.75)] || 0
+                }
+            };
+            const scopeText = document.getElementById('analysisLotoScopeText');
+            if (scopeText && lotoWindow.days.length) {
+                scopeText.innerHTML = `Thống kê <b>2 số cuối của tất cả 27 số thuộc 8 giải</b> trong <b>${lotoWindow.days.length} ngày</b>, từ <b>${dateLabel(lotoWindow.days[0].day)}</b> đến <b>${dateLabel(lotoWindow.days[lotoWindow.days.length - 1].day)}</b>. Tần suất đếm từng lượt xuất hiện; cột GĐB giữ lại để đối chiếu cùng số.`;
+            }
+            const activeSort = document.querySelector('#analysisNumberCard .analysis-sort-btn.active[data-kind="loto"]')?.dataset.sort || 'number';
+            renderAnalysisNumberRows(activeSort, 'loto');
+        }
+
+        function applyAnalysisAccordionDefault() {
+            const report = document.getElementById('analysisReport');
+            if (!report || typeof report.querySelectorAll !== 'function') return;
+            const openByDefault = (document.getElementById('cfgAnalysisDefault')?.value || 'closed') === 'open';
+            report.querySelectorAll('.analysis-accordion-card').forEach(card => {
+                const open = openByDefault;
+                card.classList.toggle('is-open', open);
+                const action = card.querySelector('.accordion-action');
+                if (action) action.innerHTML = open
+                    ? '<i class="fas fa-chevron-up"></i> Thu gọn'
+                    : '<i class="fas fa-chevron-down"></i> Chi tiết';
+            });
+        }
+
+        function setupAnalysisAccordions() {
+            const report = document.getElementById('analysisReport');
+            if (!report || typeof report.querySelectorAll !== 'function' || typeof report.querySelector !== 'function') return;
+            const collapsibleKeywords = [
+                'TOP CẦU CHẠY DÀI NHẤT',
+                'ĐỒNG THUẬN SỐ',
+                'THỐNG KÊ KHOẢNG CÁCH NGÀY CHƯA VỀ',
+                'NHỊP CẦU THUẬN / ĐẢO',
+                'DANH SÁCH LOẠI TRỪ',
+                'CẦU 2 NGÀY LIÊN TIẾP TRÙNG GĐB',
+                'GĐB · 00–99',
+                'LÔ TÔ · 00–99'
+            ];
+
+            Array.from(report.querySelectorAll('.report-card')).forEach(card => {
+                const heading = Array.from(card.children || []).find(child => child.tagName === 'H4');
+                if (!heading) return;
+                const title = heading.textContent.trim();
+                if (!collapsibleKeywords.some(keyword => title.includes(keyword))) return;
+                if (card.classList.contains('analysis-accordion-card')) return;
+
+                const content = document.createElement('div');
+                content.className = 'analysis-accordion-content';
+                let node = heading.nextSibling;
+                while (node) {
+                    const next = node.nextSibling;
+                    content.appendChild(node);
+                    node = next;
+                }
+
+                const trigger = document.createElement('button');
+                trigger.type = 'button';
+                trigger.className = 'analysis-accordion-trigger';
+                const action = document.createElement('span');
+                action.className = 'accordion-action';
+                action.innerHTML = '<i class="fas fa-chevron-down"></i> Chi tiết';
+                trigger.appendChild(heading);
+                trigger.appendChild(action);
+
+                card.innerHTML = '';
+                card.classList.add('analysis-accordion-card');
+                card.appendChild(trigger);
+                card.appendChild(content);
+                trigger.addEventListener('click', () => {
+                    const open = card.classList.toggle('is-open');
+                    action.innerHTML = open
+                        ? '<i class="fas fa-chevron-up"></i> Thu gọn'
+                        : '<i class="fas fa-chevron-down"></i> Chi tiết';
+                });
+            });
+            applyAnalysisAccordionDefault();
+        }
+
+        function runAnalysis() {
+            if (!RAW_DAYS || RAW_DAYS.length < 3) {
+                alert('Cần ít nhất 3 ngày dữ liệu để phân tích.');
+                return;
+            }
+            
+            document.getElementById('analysisStatus').textContent = 'Đang phân tích...';
+            document.getElementById('analysisStatus').style.color = '#fbbf24';
+            
+            setTimeout(() => {
+                // Phân tích đến ngày đang chọn; nếu chưa chọn thì dùng ngày cuối file.
+                const selectedEnd = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+                const n = selectedEnd + 1;
+                if (n < 3) {
+                    document.getElementById('analysisStatus').textContent = 'Chưa đủ dữ liệu';
+                    document.getElementById('analysisStatus').style.color = '#f87171';
+                    alert('Cần chọn mốc có ít nhất 3 ngày dữ liệu để phân tích walk-forward.');
+                    return;
+                }
+                const fullHistory = RAW_DAYS.slice(0, n).map(item => flattenDayData(item.data));
+                const targets = RAW_DAYS.slice(0, n).map(item => getLast2DB(item.data));
+                const lotoWindow = getAnalysisLotoWindow(selectedEnd);
+                
+                let html = `
+                    <div style="background: rgba(74, 222, 128, 0.1); border-left: 4px solid #4ade80; padding: 12px; margin-bottom: 16px; border-radius: 0 8px 8px 0;">
+                        <span style="color: #4ade80; font-weight: 700; font-size: 13px;"><i class="fas fa-shield-alt"></i> PHẠM VI DỮ LIỆU</span>
+                        <p style="margin: 4px 0 0 0; color: #e8edf5; font-size: 12px;">Toàn bộ báo cáo dưới đây chỉ sử dụng dữ liệu từ <b>${dateLabel(RAW_DAYS[0].day)}</b> đến mốc <b>${dateLabel(RAW_DAYS[n - 1].day)}</b>. Không sử dụng dữ liệu tương lai để đảm bảo tính trung thực.</p>
+                    </div>
+                `;
+                
+                // Tạo thống kê cho 00–99 theo hai phạm vi riêng: GĐB và toàn bộ Lô tô.
+                // Tần suất Lô tô đếm từng lần xuất hiện trong 27 số của mỗi ngày.
+                // Gan tính theo số ngày kể từ ngày gần nhất số đó xuất hiện trong phạm vi tương ứng.
+                const buildNumberStats = (scope) => {
+                    if (scope === 'loto') return getLotoStatsForWindow(lotoWindow.days);
+                    return Array.from({ length: 100 }, (_, number) => {
+                        const label = String(number).padStart(2, '0');
+                        let freq = 0;
+                        let lastIndex = -1;
+                        for (let idx = 0; idx < n; idx++) {
+                            let appearedThisDay = false;
+                            if (targets[idx] === label) {
+                                freq++;
+                                appearedThisDay = true;
+                            }
+                            if (appearedThisDay) lastIndex = idx;
+                        }
+                        return {
+                            number,
+                            label,
+                            freq,
+                            lastDate: lastIndex >= 0 && RAW_DAYS[lastIndex] ? RAW_DAYS[lastIndex].day : null,
+                            ganDays: lastIndex >= 0 ? (n - 1 - lastIndex) : -1
+                        };
+                    });
+                };
+
+                const gdbStats = buildNumberStats('gdb');
+                const lotoStats = buildNumberStats('loto');
+                lotoStats.forEach(item => {
+                    item.gdbLastDate = gdbStats[item.number].lastDate;
+                });
+                analysisNumberStats = { gdb: gdbStats, loto: lotoStats };
+
+                // Đánh dấu nóng/khá cao theo trung vị và nhóm 25% cao nhất của từng phạm vi.
+                ['gdb', 'loto'].forEach(scope => {
+                    const sortedFrequencies = analysisNumberStats[scope].map(item => item.freq).sort((a, b) => a - b);
+                    analysisFreqThresholds[scope] = {
+                        warm: sortedFrequencies[Math.floor(sortedFrequencies.length * 0.50)] || 0,
+                        hot: sortedFrequencies[Math.floor(sortedFrequencies.length * 0.75)] || 0
+                    };
+                });
+
+                // Card 1: Thông tin dữ liệu
+                html += `
+                    <div class="report-card">
+                        <h4><i class="fas fa-database"></i> TỔNG QUAN DỮ LIỆU</h4>
+                        <p>Đã phân tích <b>${n}</b> ngày (từ ${dateLabel(RAW_DAYS[0].day)} đến ${dateLabel(RAW_DAYS[n-1].day)}).</p>
+                        <p>Tổng số cặp vị trí: <b>5671</b> cặp (107 × 106 / 2).</p>
+                    </div>
+                `;
+
+                // Đã bỏ "TOP VỊ TRÍ TẠO ĐẶC BIỆT NHIỀU NHẤT" và "CẢNH BÁO SỚM TỪ VỊ TRÍ NHẠY NHẤT"
+                // theo yêu cầu — cả 2 xếp hạng theo tổng số lần khớp CỘNG DỒN cả lịch sử (kể cả
+                // khớp rời rạc 1 ngày, không có chuỗi liên tục), không nhất quán với nguyên tắc
+                // "chỉ tính khớp LIÊN TỤC" mà bảng CẦU 2 NGÀY LIÊN TIẾP TRÙNG GĐB bên dưới đang
+                // áp dụng đúng. Toàn bộ 10 vị trí ở 2 card cũ khi kiểm tra thực tế đều có "Đang
+                // chạy hiện tại = 0N" — tức không hề đang hoạt động — nhưng vẫn hiển thị số dự
+                // đoán in đậm gây hiểu nhầm là tín hiệu mạnh. CẦU 2 NGÀY LIÊN TIẾP TRÙNG GĐB là
+                // chuẩn duy nhất còn lại cho việc này, đúng nguyên tắc minh bạch của dự án.
+                // CẬP NHẬT: theo phản hồi người dùng, bảng này giờ lấy run>=2 (không chỉ ==2) để
+                // không bỏ sót các cặp đang chạy dài hơn (đo được xảy ra ~2.8% số ngày trong lịch
+                // sử) — mỗi ô vẫn ghi rõ đúng số ngày thực tế (2N/3N/4N...), không gộp lẫn.
+
+                                // Khu vực tần suất chạm đã được xóa theo yêu cầu; các phần phân tích khác giữ nguyên.
+
+                
+                // Phần Đồng thuận số đã được loại bỏ theo yêu cầu; các phân tích khác giữ nguyên.
+                
+                // Card: Thống kê Lô Gan (Recency) của 2 số cuối ĐB
+                // Tính khoảng cách từ lần xuất hiện trước đó đến ngày n-1
+                let recencyHtml = '';
+                const lastTarget = targets[n - 1];
+                let lastSeenDays = -1;
+                for (let t = n - 2; t >= 0; t--) {
+                    if (targets[t] === lastTarget) {
+                        lastSeenDays = (n - 1) - t;
+                        break;
+                    }
+                }
+                const lastSeenText = lastSeenDays === -1 ? 'Chưa từng ra trong lịch sử đang chọn' : `Cách đây ${lastSeenDays} ngày`;
+                
+                // Đếm khoảng cách chưa về của 100 số tại ngày đang chọn (ngày n-1)
+                const currentRecency = Array(100).fill(-1);
+                for (let num = 0; num < 100; num++) {
+                    const strNum = num < 10 ? '0' + num : String(num);
+                    for (let t = n - 1; t >= 0; t--) {
+                        if (targets[t] === strNum) {
+                            currentRecency[num] = (n - 1) - t;
+                            break;
+                        }
+                    }
+                }
+                
+                // Thống kê phân bố Recency cho 100 số
+                let ganCount = { '0-3': 0, '4-10': 0, '>10': 0, 'chua_ra': 0 };
+                currentRecency.forEach(r => {
+                    if (r === -1) ganCount['chua_ra']++;
+                    else if (r <= 3) ganCount['0-3']++;
+                    else if (r <= 10) ganCount['4-10']++;
+                    else ganCount['>10']++;
+                });
+
+                // Card: Tỷ lệ Thuận / Đảo trong 30 ngày gần nhất
+                const THUAN_DAO_WINDOW = Math.min(30, n - 1);
+                let countThuan = 0;
+                let countDao = 0;
+                let countHoa = 0; // Không có cầu 2N nào hoặc cầu trúng không rõ ràng
+                
+                // Hàm tính lại số lượng cầu 2N+ trúng trong một ngày t (từ 1 đến n-2)
+                for (let t = n - 1 - THUAN_DAO_WINDOW; t < n - 1; t++) {
+                    if (t < 1) continue;
+                    const target = targets[t + 1];
+                    let hitsThuan = 0;
+                    let hitsDao = 0;
+                    
+                    for (let a = 0; a < 107; a++) {
+                        for (let b = a + 1; b < 107; b++) {
+                            // Tính chuỗi liên tiếp đến ngày t
+                            let pattern = [];
+                            for (let past = t - 1; past >= 0; past--) {
+                                const p = String(fullHistory[past][a]) + String(fullHistory[past][b]);
+                                const pRev = String(fullHistory[past][b]) + String(fullHistory[past][a]);
+                                const dbPast = targets[past + 1];
+                                const isSame = p === pRev; // A=B: khớp cả 2 chiều cùng lúc, không nói lên hướng nào
+                                if (p === dbPast) pattern.unshift(isSame ? 'S' : 'E');
+                                else if (pRev === dbPast) pattern.unshift('I');
+                                else break;
+                            }
+                            
+                            if (pattern.length >= 2) {
+                                // Chỉ dựa vào bằng chứng hướng THẬT (E/I) — bỏ qua 'S' khi xét thuần nhất,
+                                // nhất quán với quy ước chính thức (xem scan()/computeRun2AtIndex()).
+                                const hasE = pattern.includes('E');
+                                const hasI = pattern.includes('I');
+                                const isAllE = hasE && !hasI;
+                                const isAllI = hasI && !hasE;
+                                const predStraight = String(fullHistory[t][a]) + String(fullHistory[t][b]);
+                                const predInverted = String(fullHistory[t][b]) + String(fullHistory[t][a]);
+                                
+                                if (isAllE && predStraight === target) hitsThuan++;
+                                if (isAllI && predInverted === target) hitsDao++;
+                            }
+                        }
+                    }
+                    
+                    if (hitsThuan > hitsDao) countThuan++;
+                    else if (hitsDao > hitsThuan) countDao++;
+                    else countHoa++;
+                }
+
+                html += `
+                    <div class="report-card">
+                        <h4><i class="fas fa-hourglass-half"></i> THỐNG KÊ KHOẢNG CÁCH NGÀY CHƯA VỀ (RECENCY)</h4>
+                        <p style="margin-bottom: 8px;">Dữ liệu tính đến ngày đang chọn: <b>${dateLabel(RAW_DAYS[n-1].day)}</b>.</p>
+                        <table>
+                            <tbody>
+                                <tr><td style="width:50%;">ĐB vừa ra (${lastTarget})</td><td style="color:#f1c40f;font-weight:bold;">${lastSeenText}</td></tr>
+                                <tr><td>Số vừa ra (0-3 ngày trước)</td><td style="color:#4ade80;">${ganCount['0-3']} số</td></tr>
+                                <tr><td>Số ra gần đây (4-10 ngày trước)</td><td style="color:#4facfe;">${ganCount['4-10']} số</td></tr>
+                                <tr><td>Số gan (>10 ngày)</td><td style="color:#f87171;">${ganCount['>10']} số</td></tr>
+                                <tr><td>Số chưa từng ra (trong dữ liệu)</td><td style="color:#7a8aaa;">${ganCount['chua_ra']} số</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 8px; font-size: 11px; color: #5a7a9a;"><i>Chỉ số này mô tả khoảng cách xuất hiện trong dữ liệu đã chọn; không nên dùng đơn độc để khẳng định xu hướng hoặc loại trừ một số cho kỳ tiếp theo.</i></p>
+                    </div>
+                `;
+
+                // Cầu 2 ngày liên tiếp trùng GĐB — tính lại đúng cho mốc hiện tại và lùi dần 4 ngày (tổng 5 mốc).
+                const run2Rows = [];
+                for (let lag = 0; lag < 5; lag++) {
+                    const idx = (n - 1) - lag;
+                    if (idx < 1) break;
+                    const mocLabel = dateLabel(RAW_DAYS[idx].day);
+                    const nextLabel = idx + 1 < RAW_DAYS.length ? dateLabel(RAW_DAYS[idx + 1].day) : 'Dự đoán (chưa có kết quả)';
+                    const r2 = computeRun2AtIndex(idx);
+                    run2Rows.push({ idx, mocLabel, nextLabel, result: r2 });
+                }
+                const run2Body = run2Rows.map((row, rowIdx) => {
+                    const hasData = row.result && row.result.flatPairs.length > 0;
+                    const chipsHtml = hasData
+                        ? row.result.flatPairs.map((p, pIdx) => {
+                            const cornerBadge = p.runLen > 2
+                                ? `<span style="position:absolute;top:-6px;right:-6px;background:#f1c40f;color:#1a1400;font-size:8px;font-weight:800;padding:1px 4px;border-radius:6px;box-shadow:0 0 0 2px #0a0e1a;">${p.runLen}N</span>`
+                                : '';
+                            const titleSuffix = p.runLen > 2 ? ` — ĐANG CHẠY ${p.runLen} NGÀY LIÊN TIẾP (dài hơn 2N thông thường, đáng chú ý hơn)` : '';
+                            return `<div class="run2-chip" style="position:relative;${p.runLen > 2 ? 'border-color:#f1c40f;' : ''}" onclick="selectRun2Chip(this, ${rowIdx}, ${row.idx}, ${p.a}, ${p.b}, '${p.pred}', ${p.runLen})" title="VT ${p.a} × VT ${p.b} — chạy ${p.runLen} ngày${titleSuffix} — bấm để xem chi tiết vị trí">
+                                ${cornerBadge}
+                                <span class="so">${p.pred}</span>
+                                <span class="vt">${p.a}×${p.b}</span>
+                            </div>`;
+                          }).join('')
+                        : `<span style="color:#7a8aaa;">Không có</span>`;
+                    const valueCell = `<div class="run2-chip-row">${chipsHtml}</div><div class="run2-shared-detail" id="run2-shared-${rowIdx}"></div>`;
+                    return `<tr><td class="run2-moc">${row.mocLabel}→${row.nextLabel}</td><td>${valueCell}</td></tr>`;
+                }).join('');
+
+                // Tổng hợp: XẾP THEO TỪNG NGÀY (ngày gần nhất trước, xa dần sau), bỏ qua đúng
+                // những ngày không có cầu 2 ngày. Mỗi ngày là 1 nhóm riêng biệt, có màu/nhãn
+                // ngày kèm theo để phân biệt vị trí nào đến từ ngày nào — không gộp lẫn các
+                // ngày với nhau. Giá trị hiển thị vẫn đối chiếu với đúng dữ liệu MỚI NHẤT hiện
+                // tại, giữ đúng chiều Thuận/Đảo đã xác định khi tìm ra cặp đó.
+                const latestSourceData = fullHistory[n - 1];
+                const dayGroupColors = ['#f1c40f', '#4facfe', '#a78bfa', '#fb7185', '#34d399'];
+                const combinedDayGroups = run2Rows
+                    .map((row, idx) => {
+                        if (!row.result || row.result.flatPairs.length === 0) return null;
+                        const chips = row.result.flatPairs.map(p => {
+                            const straight = String(latestSourceData[p.a]) + String(latestSourceData[p.b]);
+                            const inverted = String(latestSourceData[p.b]) + String(latestSourceData[p.a]);
+                            const value = p.type === 'E' ? straight : inverted;
+                            return { ...p, value };
+                        });
+                        return { mocLabel: row.mocLabel, color: dayGroupColors[idx % dayGroupColors.length], chips };
+                    })
+                    .filter(Boolean);
+
+                const combinedRowLabel = run2Rows.length ? run2Rows[0].nextLabel : 'ngày kế tiếp';
+                const combinedChips = combinedDayGroups.length
+                    ? combinedDayGroups.map(group => `
+                        <div style="border-left:3px solid ${group.color};padding-left:8px;margin-bottom:8px;">
+                            <div style="font-size:10px;font-weight:700;color:${group.color};margin-bottom:4px;text-transform:uppercase;">Từ ngày ${group.mocLabel}</div>
+                            <div class="run2-chip-row">${group.chips.map(p =>
+                                `<div class="run2-chip" onclick="selectCombinedChip(this, ${n - 1}, ${p.a}, ${p.b}, '${p.value}')" title="VT ${p.a} × VT ${p.b} (${p.type === 'E' ? 'Thuận' : 'Đảo'}) — nguồn ngày ${group.mocLabel} — bấm để xem chi tiết vị trí">
+                                    <span class="so">${p.value}</span>
+                                    <span class="vt">${p.a}×${p.b}</span>
+                                </div>`
+                              ).join('')}</div>
+                        </div>
+                      `).join('')
+                    : `<span style="color:#7a8aaa;">Không có vị trí nào để tổng hợp</span>`;
+                const combinedRowHtml = `<tr style="border-top:2px solid rgba(241,196,15,0.35);">
+                    <td class="run2-moc"><b>Tổng hợp vị trí 5 ngày</b><br>→ ${combinedRowLabel}</td>
+                    <td>${combinedChips}<div class="run2-shared-detail" id="run2-shared-combined"></div></td>
+                </tr>`;
+
+                html += `
+                    <div class="report-card">
+                        <h4><i class="fas fa-bullseye"></i> CẦU LIÊN TIẾP TRÙNG GĐB — TỪ 2 NGÀY TRỞ LÊN (5 NGÀY GẦN NHẤT)</h4>
+                        <p style="margin-bottom: 6px;">Mỗi ô số = 1 cặp vị trí khớp GĐB liên tục <b>từ 2 ngày trở lên</b> (không gộp trùng ô). Ô có viền/nhãn vàng "<b>N</b>N" là cặp đang chạy dài hơn 2 ngày — đáng chú ý hơn vì hiếm gặp (~2.8% số ngày). Bấm vào ô để xem vị trí chi tiết. Dòng cuối "Tổng hợp vị trí 5 ngày" gom lại tất cả vị trí đã tìm được ở 5 dòng trên, đối chiếu với đúng dữ liệu mới nhất hiện tại để ra số hiện tại cho từng vị trí đó.</p>
+                        <table class="run2-table">
+                            <thead><tr><th>Mốc → Dự đoán</th><th>Số (cầu ≥2 ngày)</th></tr></thead>
+                            <tbody>${run2Body}${combinedRowHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+
+                html += `
+                    <div class="report-card" style="border-left: 4px solid #f1c40f; background: rgba(241,196,15,0.05);">
+                        <h4 style="color:#f1c40f; font-size:13px; margin-bottom:6px;"><i class="fas fa-exclamation-triangle"></i> LƯU Ý KHI ĐỌC PHÂN TÍCH</h4>
+                        <p style="color:#e8edf5; font-size:12px; margin:0;">
+                            Các bảng dưới đây là <b>thống kê mô tả quá khứ</b>, không phải tỷ lệ thắng trong tương lai. Nhóm <b>Hỗn hợp</b> đang hiển thị số dự đoán theo hướng đảo chỉ để dễ quan sát; chưa có bằng chứng khẳng định hướng đảo luôn tốt hơn.
+                        </p>
+                    </div>
+                    <div class="analysis-two-columns" id="analysisNumberCard">
+                        <div class="report-card">
+                            <h4><i class="fas fa-award"></i> GĐB · 00–99 (CHÍNH)</h4>
+                            <p style="margin-bottom: 8px;">Thống kê <b>2 số cuối Giải Đặc biệt</b> đến ngày <b>${dateLabel(RAW_DAYS[n - 1].day)}</b>. Tần suất tối đa là 1 lần/ngày; Gan tính từ lần ra GĐB gần nhất.</p>
+                            ${buildAnalysisGdbSummary(gdbStats)}
+                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                                <button class="analysis-sort-btn active" data-kind="gdb" data-sort="number" onclick="sortAnalysisNumberTable('number','gdb')">00 → 99</button>
+                                <button class="analysis-sort-btn" data-kind="gdb" data-sort="freq" onclick="sortAnalysisNumberTable('freq','gdb')">Tần suất cao</button>
+                                <button class="analysis-sort-btn" data-kind="gdb" data-sort="gan" onclick="sortAnalysisNumberTable('gan','gdb')">Gan nhiều ngày</button>
+                            </div>
+                            <div class="analysis-number-table-wrap">
+                                <table class="analysis-number-table">
+                                    <thead><tr><th>Số</th><th>Tần suất GĐB</th><th>Lần ra GĐB</th><th>Gan GĐB</th></tr></thead>
+                                    <tbody id="analysisGdbNumberBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="report-card">
+                            <h4><i class="fas fa-layer-group"></i> LÔ TÔ · 00–99 (THAM KHẢO)</h4>
+                            <p id="analysisLotoScopeText" style="margin-bottom: 8px;">Thống kê <b>2 số cuối của tất cả 27 số thuộc 8 giải</b> trong <b>${lotoWindow.days.length} ngày</b>, từ <b>${dateLabel(lotoWindow.days[0].day)}</b> đến <b>${dateLabel(lotoWindow.days[lotoWindow.days.length - 1].day)}</b>. Tần suất đếm từng lượt xuất hiện; cột GĐB giữ lại để đối chiếu cùng số.</p>
+                            <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:10px; padding:6px 8px; background:rgba(0,0,0,.16); border:1px solid rgba(255,255,255,.05); border-radius:8px;">
+                                <label for="analysisLotoNumDays" style="font-size:10px; color:#9aabcd; font-weight:700;">Cửa sổ Loto:</label>
+                                <input id="analysisLotoNumDays" type="number" min="2" max="30" step="1" value="${lotoWindow.numDays}" aria-label="Số ngày phân tích Loto" style="width:48px; padding:3px 5px; border:1px solid rgba(255,255,255,.12); border-radius:5px; background:rgba(0,0,0,.28); color:#e8edf5; font:700 12px 'Courier New',monospace; text-align:center;">
+                                <span style="font-size:10px; color:#7a8aaa;">ngày</span>
+                                <button type="button" class="analysis-sort-btn" onclick="refreshLotoAnalysisOnly()">Cập nhật Loto</button>
+                                <span style="font-size:9px; color:#5a7a9a;">Chỉ áp dụng cho bảng này</span>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                                <button class="analysis-sort-btn active" data-kind="loto" data-sort="number" onclick="sortAnalysisNumberTable('number','loto')">00 → 99</button>
+                                <button class="analysis-sort-btn" data-kind="loto" data-sort="freq" onclick="sortAnalysisNumberTable('freq','loto')">Tần suất cao</button>
+                                <button class="analysis-sort-btn" data-kind="loto" data-sort="gan" onclick="sortAnalysisNumberTable('gan','loto')">Gan nhiều ngày</button>
+                            </div>
+                            <div class="analysis-number-table-wrap">
+                                <table class="analysis-number-table">
+                                    <thead><tr><th>Số</th><th>Tần suất loto</th><th>Lần ra loto</th><th>GĐB gần nhất</th><th>Gan loto</th></tr></thead>
+                                    <tbody id="analysisLotoNumberBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="margin-top: 8px; font-size: 11px; color: #5a7a9a;"><i>Màu GĐB được xếp tương đối theo bảng. Riêng Loto dùng ngưỡng cố định: xám trung tính = 0 lần/chưa ra, xanh ghi = 1 lần, xanh lam sáng = 2 lần, vàng = 3 lần/trung bình, cam = 4 lần/cao, đỏ = từ 5 lần/quá nóng.</i></p>
+                `;
+
+                document.getElementById('analysisReport').innerHTML = html;
+                setupAnalysisAccordions();
+                renderAnalysisNumberRows('number', 'gdb');
+                renderAnalysisNumberRows('number', 'loto');
+                document.getElementById('analysisStatus').textContent = 'Đã phân tích xong';
+                document.getElementById('analysisStatus').style.color = '#4ade80';
+                
+            }, 100);
+        }
+
+        // ================================================================
+        // LOGIC TẠO DÀN SỐ
+        // ================================================================
+        let danFreqData = null;
+        let danFreq4Data = null;
+        function generateDanSo() {
+            if (!RAW_DAYS || RAW_DAYS.length === 0) {
+                alert('Chưa có dữ liệu TXT.');
+                return;
+            }
+            
+            let numDays = parseInt(document.getElementById('danNumDays').value);
+            if (isNaN(numDays) || numDays < 2) numDays = 2;
+            if (numDays > 30) numDays = 30;
+            document.getElementById('danNumDays').value = numDays;
+            
+            let freqMin = parseInt(document.getElementById('danFreqMin').value);
+            let freqMax = parseInt(document.getElementById('danFreqMax').value);
+            if (isNaN(freqMin)) freqMin = 1;
+            if (isNaN(freqMax)) freqMax = 3;
+            freqMin = Math.max(1, Math.min(20, freqMin));
+            freqMax = Math.max(1, Math.min(20, freqMax));
+            document.getElementById('danFreqMin').value = freqMin;
+            document.getElementById('danFreqMax').value = freqMax;
+            
+            if (freqMin > freqMax) {
+                alert('Tần suất tối thiểu không được lớn hơn tối đa!');
+                return;
+            }
+            
+            // Tính toán trên dữ liệu đến ngày được chọn ở dropdown, nếu chưa chọn thì lấy ngày cuối cùng
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const startIndex = Math.max(0, endIndex - numDays + 1);
+            const recentDays = RAW_DAYS.slice(startIndex, endIndex + 1);
+            
+            if (recentDays.length === 0) {
+                alert('Không đủ dữ liệu trong khoảng đã chọn.');
+                return;
+            }
+            
+            // Lấy tất cả 2 số cuối từ các giải, kèm theo dõi ngày xuất hiện GẦN NHẤT của
+            // từng số trong đúng cửa sổ N ngày đang xét (để xếp hạng theo ngày gần nhất).
+            const allNumbers = [];
+            const lastSeenInfo = {}; // num -> { dayIndex, day }
+            recentDays.forEach((day, dayIdx) => {
+                day.data.forEach(row => {
+                    row.numbers.forEach(num => {
+                        const str = String(num);
+                        const num2 = str.length >= 2 ? str.slice(-2) : str.padStart(2, '0');
+                        allNumbers.push(num2);
+                        // recentDays đã theo thứ tự thời gian tăng dần, nên ghi đè liên tục
+                        // sẽ giữ lại đúng lần xuất hiện GẦN NHẤT (dayIdx lớn nhất) sau vòng lặp.
+                        lastSeenInfo[num2] = { dayIndex: dayIdx, day: day.day };
+                    });
+                });
+            });
+            
+            // Đếm tần suất
+            const freq = {};
+            allNumbers.forEach(num => {
+                freq[num] = (freq[num] || 0) + 1;
+            });
+            
+            // Hiển thị chuỗi ngày phân tích
+            const nextDayLabel = endIndex + 1 < RAW_DAYS.length ? dateLabel(RAW_DAYS[endIndex + 1].day) : 'Dự đoán';
+            const dateChain = [...recentDays].reverse().map(d => dateLabel(d.day)).join(' → ');
+            document.getElementById('summaryDates').innerHTML = `📅 <strong>${nextDayLabel}</strong> → ${dateChain}`;
+
+            // Phân loại nhóm tần suất cho thống kê
+            const allUniqueNumbers = Object.keys(freq).sort((a, b) => {
+                if (freq[b] !== freq[a]) return freq[b] - freq[a];
+                return parseInt(a) - parseInt(b);
+            });
+            
+            const countHot = allUniqueNumbers.filter(n => freq[n] >= 4).length;
+            const countHigh = allUniqueNumbers.filter(n => freq[n] === 3).length;
+            const countMid = allUniqueNumbers.filter(n => freq[n] === 2).length;
+            const countLow = allUniqueNumbers.filter(n => freq[n] === 1).length;
+            
+            document.getElementById('summaryStats').innerHTML = `
+                <span>📈 Tổng: <strong style="color:#e8edf5;">${allUniqueNumbers.length}</strong> số duy nhất (${allNumbers.length} lượt)</span>
+                <span class="dan-stat-hot">● Hot (≥4): <strong>${countHot}</strong></span>
+                <span class="dan-stat-high">● Khá cao (3): <strong>${countHigh}</strong></span>
+                <span class="dan-stat-mid">● Trung bình (2): <strong>${countMid}</strong></span>
+                <span class="dan-stat-low">● Ít (1): <strong>${countLow}</strong></span>
+            `;
+            
+            let summaryHtml = '';
+            allUniqueNumbers.forEach(num => {
+                const f = freq[num];
+                let freqClass = f >= 4 ? 'freq-high' : `freq-${f}`;
+                summaryHtml += `<span class="dan-number ${freqClass}" title="Tần suất: ${f} lần" style="font-size:13px; width:30px; height:30px;">${num}</span>`;
+            });
+            document.getElementById('summaryNumbers').innerHTML = summaryHtml;
+
+            // Lọc số theo khoảng tần suất cho KẾT QUẢ DÀN SỐ
+            const filtered = Object.keys(freq)
+                .filter(num => freq[num] >= freqMin && freq[num] <= freqMax)
+                .sort((a, b) => parseInt(a) - parseInt(b));
+                
+            // Phân loại theo tần suất
+            const freqGroups = {};
+            for (let f = freqMin; f <= freqMax; f++) {
+                freqGroups[f] = filtered.filter(num => freq[num] === f);
+            }
+            
+            danFreqData = { dan: filtered };
+            
+            document.getElementById('danCountLabel').innerHTML = `<span class="total-count-label">Tổng:</span> <strong class="total-count-value">${filtered.length}</strong> <span class="total-count-unit">số</span>`;
+            
+            let statsHtml = '';
+            for (let f = freqMin; f <= freqMax; f++) {
+                const count = freqGroups[f]?.length || 0;
+                const colorMap = {
+                    1: '#4ade80', 2: '#fbbf24', 3: '#f87171', 4: '#ec4899'
+                };
+                const color = f >= 4 ? '#ec4899' : (colorMap[f] || '#a0b0c0');
+                statsHtml += `<span style="color:${color};">Tần suất ${f}: <strong style="color:#e8edf5;">${count}</strong> số</span>`;
+            }
+            document.getElementById('danStats').innerHTML = statsHtml;
+            
+            const numbersContainer = document.getElementById('danNumbers');
+            let html = '';
+            filtered.forEach(num => {
+                const f = freq[num];
+                let freqClass = f >= 4 ? 'freq-high' : `freq-${f}`;
+                html += `<span class="dan-number ${freqClass}" title="Tần suất: ${f} lần">${num}</span>`;
+            });
+            numbersContainer.innerHTML = html;
+
+            // Xếp hạng các số trong dàn theo NGÀY XUẤT HIỆN GẦN NHẤT trước tiên
+            // (số nào mới xuất hiện gần đây nhất trong cửa sổ N ngày được ưu tiên lên đầu),
+            // kèm ngày cụ thể và tổng số lần xuất hiện trong đúng cửa sổ đang xét.
+            const recencyBox = document.getElementById('danRecencyBox');
+            const recencyBody = document.getElementById('danRecencyTableBody');
+            if (filtered.length && recencyBox && recencyBody) {
+                const ranked = [...filtered].sort((numA, numB) => {
+                    const dayA = lastSeenInfo[numA]?.dayIndex ?? -1;
+                    const dayB = lastSeenInfo[numB]?.dayIndex ?? -1;
+                    if (dayB !== dayA) return dayB - dayA; // ngày gần nhất trước
+                    if (freq[numB] !== freq[numA]) return freq[numB] - freq[numA]; // hòa thì nhiều lần hơn trước
+                    return parseInt(numA) - parseInt(numB);
+                });
+                recencyBody.innerHTML = ranked.map((num, idx) => {
+                    const info = lastSeenInfo[num];
+                    const dayText = info ? dateLabel(info.day) : '--';
+                    return `<tr>
+                        <td style="padding:6px 7px;color:#4facfe;font-weight:700;">${idx + 1}</td>
+                        <td style="padding:6px 7px;font-family:monospace;font-weight:800;font-size:15px;color:#f1c40f;">${num}</td>
+                        <td style="padding:6px 7px;color:#c9d4e3;">${dayText}</td>
+                        <td style="padding:6px 7px;text-align:right;color:#94a3b8;">${freq[num]} lần</td>
+                    </tr>`;
+                }).join('');
+                recencyBox.style.display = '';
+            } else if (recencyBox) {
+                recencyBox.style.display = 'none';
+                if (recencyBody) recencyBody.innerHTML = '';
+            }
+
+            document.getElementById('btnCopyDan').style.display = 'inline-block';
+            document.getElementById('btnExportDan').style.display = 'inline-block';
+        }
+
+        function generateDanFreq4() {
+            if (!RAW_DAYS || RAW_DAYS.length === 0) {
+                alert('Chưa có dữ liệu TXT.');
+                return;
+            }
+            let numDays = parseInt(document.getElementById('danNumDays')?.value, 10);
+            if (isNaN(numDays) || numDays < 2) numDays = 2;
+            numDays = Math.min(30, numDays);
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const startIndex = Math.max(0, endIndex - numDays + 1);
+            const recentDays = RAW_DAYS.slice(startIndex, endIndex + 1);
+            if (!recentDays.length) {
+                alert('Không đủ dữ liệu trong khoảng đã chọn.');
+                return;
+            }
+            let q = parseInt(document.getElementById('danFreq4RecentDays')?.value, 10);
+            if (isNaN(q) || q < 1) q = 1;
+            q = Math.min(3, q, recentDays.length);
+            let maxSize = parseInt(document.getElementById('danFreq4Max')?.value, 10);
+            if (isNaN(maxSize) || maxSize < 0) maxSize = 5;
+            maxSize = Math.min(20, maxSize);
+            document.getElementById('danFreq4RecentDays').value = String(q);
+            document.getElementById('danFreq4Max').value = String(maxSize);
+            const freq = {};
+            const allNumbersByDay = recentDays.map(day => {
+                const numbers = [];
+                (day.data || []).forEach(row => (row.numbers || []).forEach(num => {
+                    const str = String(num);
+                    numbers.push(str.length >= 2 ? str.slice(-2) : str.padStart(2, '0'));
+                }));
+                numbers.forEach(num => { freq[num] = (freq[num] || 0) + 1; });
+                return numbers;
+            });
+            const recentSet = new Set(allNumbersByDay.slice(-q).flat());
+            const scoreRecent = num => {
+                let score = 0;
+                for (let age = 0; age < allNumbersByDay.length; age++) {
+                    if (new Set(allNumbersByDay[allNumbersByDay.length - 1 - age]).has(num)) score += Math.pow(0.85, age);
+                }
+                return score;
+            };
+            const candidates = Object.keys(freq).filter(num => freq[num] === 4 && recentSet.has(num));
+            const selected = candidates.sort((a, b) => (scoreRecent(b) - scoreRecent(a)) || Number(a) - Number(b)).slice(0, maxSize);
+            const nextDataDay = endIndex + 1 < RAW_DAYS.length ? RAW_DAYS[endIndex + 1]?.day : '';
+            const selectedDay = endIndex >= 0 ? RAW_DAYS[endIndex]?.day : '';
+            let forecastDay = nextDataDay;
+            if (!forecastDay && selectedDay) {
+                const parts = String(selectedDay).split('-').map(Number);
+                if (parts.length === 3 && parts.every(Number.isFinite)) {
+                    const next = new Date(parts[2], parts[1] - 1, parts[0] + 1);
+                    forecastDay = `${String(next.getDate()).padStart(2, '0')}-${String(next.getMonth() + 1).padStart(2, '0')}-${next.getFullYear()}`;
+                }
+            }
+            danFreq4Data = { dan: selected, freq, candidates, numDays, q, forecastDay };
+            const windowLabel = document.getElementById('danFreq4WindowLabel');
+            if (windowLabel) windowLabel.textContent = String(recentDays.length);
+            const summary = document.getElementById('danFreq4Summary');
+            if (summary) summary.innerHTML = `Cửa sổ <strong>${recentDays.length} ngày</strong> · điều kiện <strong>đúng 4 lần</strong> · phải xuất hiện trong <strong>${q} ngày gần nhất</strong> · ${candidates.length} số thỏa trước giới hạn, chọn <strong>${selected.length}</strong> số.`;
+            const numbers = document.getElementById('danFreq4Numbers');
+            if (numbers) numbers.innerHTML = selected.length ? selected.map(num => `<span class="dan-number freq-high" title="Tần suất: 4 lần · Nhóm 4 · Ngày dự đoán: ${forecastDay ? dateLabel(forecastDay) : '--/--/----'}" style="border-color:rgba(236,72,153,.65);color:#f0abfc;background:rgba(236,72,153,.14);">${num}</span>`).join('') : '<span style="color:#7a8aaa;font-size:12px;">Không có số thỏa điều kiện.</span>';
+            const copy = document.getElementById('btnCopyDanFreq4');
+            const exportBtn = document.getElementById('btnExportDanFreq4');
+            if (copy) copy.style.display = selected.length ? 'inline-flex' : 'none';
+            if (exportBtn) exportBtn.style.display = selected.length ? 'inline-flex' : 'none';
+        }
+
+        function copyDanFreq4() {
+            const dan = danFreq4Data?.dan || [];
+            if (!dan.length) return;
+            const textarea = document.createElement('textarea');
+            textarea.value = dan.join(' ');
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            textarea.remove();
+            const btn = document.getElementById('btnCopyDanFreq4');
+            if (btn) { const old = btn.innerHTML; btn.innerHTML = '<i class="fas fa-check"></i> Đã chép'; setTimeout(() => { btn.innerHTML = old; }, 1800); }
+        }
+
+        function exportDanFreq4Txt() {
+            const dan = danFreq4Data?.dan || [];
+            if (!dan.length) return;
+            const lines = [];
+            for (let i = 0; i < dan.length; i += 10) lines.push(dan.slice(i, i + 10).join(' '));
+            const forecastLabel = danFreq4Data.forecastDay ? dateLabel(danFreq4Data.forecastDay) : '--/--/----';
+            const text = `Ngày dự đoán dàn số Tần suất 4: ${forecastLabel}\nDàn số:\n${lines.join('\n')}\n`;
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${danFreq4Data.forecastDay ? danFreq4Data.forecastDay.replace(/[^0-9-]/g, '-') : 'khong-xac-dinh'}-tan-suat-4.txt`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function copyDanSo() {
+            const dan = danFreqData?.dan || [];
+            if (dan.length === 0) return;
+            const text = dan.join(' ');
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            const btn = document.getElementById('btnCopyDan');
+            const oldHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Đã chép';
+            setTimeout(() => { btn.innerHTML = oldHtml; }, 2000);
+        }
+
+        function exportDanSoTxt() {
+            const dan = danFreqData?.dan || [];
+            if (dan.length === 0) return;
+
+            // Ngày dự đoán là ngày tháng thực tế tiếp theo của dữ liệu.
+            // Nếu mốc là bản ghi cuối, tính ngày lịch kế tiếp từ chính ngày cuối đó;
+            // tuyệt đối không ghi chữ chung chung "ngày kế tiếp".
+            const endIndex = TARGET_INDEX >= 0 ? TARGET_INDEX : RAW_DAYS.length - 1;
+            const selectedDay = endIndex >= 0 ? RAW_DAYS[endIndex]?.day : '';
+            const nextDataDay = endIndex >= 0 && endIndex + 1 < RAW_DAYS.length ? RAW_DAYS[endIndex + 1]?.day : '';
+            let forecastDay = nextDataDay;
+            if (!forecastDay && selectedDay) {
+                const parts = String(selectedDay).split('-').map(Number);
+                if (parts.length === 3 && parts.every(Number.isFinite)) {
+                    const next = new Date(parts[2], parts[1] - 1, parts[0] + 1);
+                    const dd = String(next.getDate()).padStart(2, '0');
+                    const mm = String(next.getMonth() + 1).padStart(2, '0');
+                    const yyyy = next.getFullYear();
+                    forecastDay = `${dd}-${mm}-${yyyy}`;
+                }
+            }
+            const forecastLabel = forecastDay ? dateLabel(forecastDay) : '--/--/----';
+
+            // Chỉ xuất đúng hai thành phần người dùng cần: ngày dự đoán và dàn số.
+            // Dàn số vẫn giữ thứ tự hiện tại, chỉ xuống dòng sau mỗi 10 số để dễ đọc.
+            const lines = [];
+            for (let i = 0; i < dan.length; i += 10) {
+                lines.push(dan.slice(i, i + 10).join(' '));
+            }
+            const text = `Ngày dự đoán dàn số: ${forecastLabel}\nDàn số:\n${lines.join('\n')}\n`;
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const safeForecast = forecastDay ? forecastDay.replace(/[^0-9-]/g, '-') : 'khong-xac-dinh';
+            link.download = `${safeForecast}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+
+            const btn = document.getElementById('btnExportDan');
+            if (btn) {
+                const oldHtml = btn.innerHTML;
